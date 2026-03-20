@@ -1,7 +1,6 @@
 {
-  "buildCommand": "vite build",
-  "outputDirectory": "dist",
+  "buildCommand": "cd apps/web && vite build",
+  "outputDirectory": "apps/web/dist",
   "installCommand": "bun install",
-  "framework": "vite",
-  "rootDirectory": "apps/web"
+  "framework": "vite"
 }
