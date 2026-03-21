@@ -56,7 +56,15 @@ export function AppLayout() {
   );
 
   // Mobile bottom nav shows at most 4 items.
-  const bottomNav = userNav.slice(0, 4);
+  const BOTTOM_NAV_BY_ROLE: Record<string, string[]> = {
+    CLIENT: ["/agendar", "/agendamentos", "/perfil"],
+    BARBER: ["/barbeiro/dashboard", "/barbeiro/agenda", "/barbeiro/comandas", "/barbeiro/ganhos"],
+    ADMIN:  ["/admin/dashboard", "/admin/servicos", "/admin/barbeiros", "/admin/relatorios"],
+  };
+  
+  const bottomNavPaths = user ? (BOTTOM_NAV_BY_ROLE[user.role] ?? []) : [];
+  const bottomNav = userNav.filter(item => bottomNavPaths.includes(item.to));
+  
 
   const handleLogout = async () => {
     try {
