@@ -2,14 +2,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import {
-  Calendar,
-  Users,
-  DollarSign,
-  ClipboardList,
-  TrendingUp,
-  Scissors,
-} from "lucide-react";
 import { adminApi, appointmentsApi } from "@/lib/api";
 import { StatsCard, Spinner } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
@@ -49,57 +41,46 @@ export function AdminDashboardPage() {
         </h1>
       </div>
 
-      {/* Today */}
+      {/* Hoje */}
       <p className="section-label mb-3">Hoje</p>
       <div className="grid grid-cols-2 gap-3 mb-6">
         <StatsCard
           label="Agendamentos"
           value={stats?.today.appointments ?? 0}
-          icon={<Calendar size={16} />}
         />
         <StatsCard
           label="Comandas abertas"
           value={stats?.today.openComandas ?? 0}
-          icon={<ClipboardList size={16} />}
         />
       </div>
 
-      {/* Month */}
+      {/* Este mês */}
       <p className="section-label mb-3">Este mês</p>
       <div className="grid grid-cols-2 gap-3 mb-6">
         <StatsCard
           label="Agendamentos"
           value={stats?.month.appointments ?? 0}
-          icon={<TrendingUp size={16} />}
         />
         <StatsCard
           label="Receita"
           value={formatCurrency(stats?.month.revenue ?? 0)}
-          icon={<DollarSign size={16} />}
         />
       </div>
 
-      {/* Totals */}
+      {/* Geral — removido card de Barbeiros, mantido Clientes e Comissões */}
       <p className="section-label mb-3">Geral</p>
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-2 gap-3 mb-8">
         <StatsCard
           label="Clientes"
           value={stats?.totals.clients ?? 0}
-          icon={<Users size={14} />}
         />
         <StatsCard
-          label="Barbeiros"
-          value={stats?.totals.barbers ?? 0}
-          icon={<Scissors size={14} />}
-        />
-        <StatsCard
-          label="Comissões"
+          label="Comissões pendentes"
           value={formatCurrency(stats?.totals.pendingCommissions ?? 0)}
-          icon={<DollarSign size={14} />}
         />
       </div>
 
-      {/* Recent appointments */}
+      {/* Agendamentos recentes */}
       <h2 className="font-display font-semibold text-white mb-4">
         Agendamentos recentes
       </h2>
@@ -111,8 +92,7 @@ export function AdminDashboardPage() {
                 {apt.client?.name}
               </p>
               <p className="text-xs text-[var(--text-muted)]">
-                {apt.service?.name} ·{" "}
-                {apt.barberProfile?.user.name}
+                {apt.service?.name} · {apt.barberProfile?.user.name}
               </p>
             </div>
             <span className={STATUS_CLASSES[apt.status]}>
