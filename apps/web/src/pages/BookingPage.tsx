@@ -25,6 +25,13 @@ type Step = "service" | "barber" | "datetime" | "confirm";
 // Brazil is always UTC-3 (DST was abolished in 2019).
 const BRT_OFFSET = "-03:00";
 
+const STEPS: { key: Step; label: string; shortLabel: string }[] = [
+  { key: "service",  label: "Serviço",  shortLabel: "Serviço"  },
+  { key: "barber",   label: "Barbeiro", shortLabel: "Barbeiro" },
+  { key: "datetime", label: "Data/Hora", shortLabel: "Horário" },
+  { key: "confirm",  label: "Confirmar", shortLabel: "Confirmar" },
+];
+
 export function BookingPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -49,7 +56,6 @@ export function BookingPage() {
     enabled: step === "barber",
   });
 
-  // Keyed on barberId + date + serviceId so React Query caches per combination.
   const availabilityQueryKey = [
     "availability",
     selectedBarber?.id,
@@ -72,15 +78,8 @@ export function BookingPage() {
 
   const bookMutation = useMutation({
     mutationFn: () => {
-      // FIX: Build the scheduledAt ISO string using the Brazil timezone offset
-      // instead of the browser's local timezone. Without this, a user whose
-      // computer is set to e.g. UTC+5 would book "09:00 local" (04:00 BRT)
-      // instead of "09:00 BRT" — a 5-hour mistake.
-      //
-      // `format(selectedDate, "yyyy-MM-dd")` gives the calendar date the user
-      // visually selected (e.g. "2026-03-22"). Appending the BRT offset ensures
-      // new Date(...) interprets the time as BRT, and toISOString() converts it
-      // correctly to UTC before sending to the server.
+      // FIX: Hardcode BRT offset so the time is always interpreted as
+      // Brazil time regardless of the user's browser timezone.
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       const scheduledAt = new Date(
         `${dateStr}T${selectedTime!}:00${BRT_OFFSET}`
@@ -101,8 +100,8 @@ export function BookingPage() {
       const message = err.response?.data?.error ?? "Erro ao agendar";
       toast.error(message);
 
-      // On conflict (409 = slot already taken), refresh the availability list
-      // so the user immediately sees the slot removed, then reset their selection.
+      // Slot already taken (409): refresh the availability list so the
+      // occupied slot disappears, then reset the user's selection.
       if (err.response?.status === 409) {
         queryClient.invalidateQueries({ queryKey: ["availability"] });
         setSelectedTime(null);
@@ -123,13 +122,6 @@ export function BookingPage() {
     }
   }, [searchParams, services]);
 
-  const STEPS: { key: Step; label: string }[] = [
-    { key: "service", label: "Serviço" },
-    { key: "barber", label: "Barbeiro" },
-    { key: "datetime", label: "Data/Hora" },
-    { key: "confirm", label: "Confirmar" },
-  ];
-
   const stepIndex = STEPS.findIndex((s) => s.key === step);
 
   // 14 days starting from today.
@@ -137,6 +129,69 @@ export function BookingPage() {
     addDays(startOfDay(new Date()), i)
   );
   const visibleDates = dateOptions.slice(calendarOffset, calendarOffset + 7);
+
+  // ── Step Indicator ──────────────────────────────────────────────────────────
+  // On very narrow screens (< 380px) showing 4 full labels + chevrons overflows.
+  // Strategy: always show the number circle; show the label only for the
+  // current step on mobile (xs), and for all steps on sm+.
+  const StepIndicator = () => (
+    <div className="flex items-center mb-8">
+      {STEPS.map((s, i) => {
+        const isDone = i < stepIndex;
+        const isCurrent = i === stepIndex;
+
+        return (
+          <div
+            key={s.key}
+            className={cn(
+              "flex items-center",
+              i < STEPS.length - 1 ? "flex-1" : ""
+            )}
+          >
+            {/* Circle */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div
+                className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-all shrink-0",
+                  isDone
+                    ? "bg-gold-600 text-white"
+                    : isCurrent
+                    ? "bg-gold-600/20 border border-gold-600 text-gold-400"
+                    : "bg-dark-200 border border-dark-50 text-[var(--text-muted)]"
+                )}
+              >
+                {isDone ? <Check size={11} /> : i + 1}
+              </div>
+
+              {/* Label: always visible for current step; hidden on xs for others */}
+              <span
+                className={cn(
+                  "text-xs font-medium whitespace-nowrap transition-all",
+                  isCurrent
+                    ? "text-white"             // current: always visible
+                    : isDone
+                    ? "text-gold-600 hidden sm:inline"  // done: hide on xs
+                    : "text-[var(--text-muted)] hidden sm:inline" // future: hide on xs
+                )}
+              >
+                {s.shortLabel}
+              </span>
+            </div>
+
+            {/* Connector line between steps */}
+            {i < STEPS.length - 1 && (
+              <div
+                className={cn(
+                  "flex-1 h-px mx-2 transition-all",
+                  isDone ? "bg-gold-600/50" : "bg-dark-50"
+                )}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="page-container animate-fade-in">
@@ -150,36 +205,7 @@ export function BookingPage() {
         </p>
       </div>
 
-      {/* ── Step indicator ── */}
-      <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-1">
-        {STEPS.map((s, i) => (
-          <div key={s.key} className="flex items-center gap-2 shrink-0">
-            <div
-              className={cn(
-                "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-all",
-                i < stepIndex
-                  ? "bg-gold-600 text-white"
-                  : i === stepIndex
-                  ? "bg-gold-600/20 border border-gold-600 text-gold-400"
-                  : "bg-dark-200 border border-dark-50 text-[var(--text-muted)]"
-              )}
-            >
-              {i < stepIndex ? <Check size={12} /> : i + 1}
-            </div>
-            <span
-              className={cn(
-                "text-xs font-medium",
-                i === stepIndex ? "text-white" : "text-[var(--text-muted)]"
-              )}
-            >
-              {s.label}
-            </span>
-            {i < STEPS.length - 1 && (
-              <ChevronRight size={14} className="text-dark-50" />
-            )}
-          </div>
-        ))}
-      </div>
+      <StepIndicator />
 
       {/* ── STEP 1: Service ── */}
       {step === "service" && (
@@ -203,17 +229,17 @@ export function BookingPage() {
                   className={cn(
                     "w-full text-left p-4 rounded-xl border transition-all duration-200",
                     selectedService?.id === service.id
-                      ? "bg-gold-600/10 border-gold-600/40 text-gold-400"
+                      ? "bg-gold-600/10 border-gold-600/40"
                       : "bg-dark-300 border-dark-50 hover:border-gold-600/30 hover:bg-dark-200"
                   )}
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
                       <p className="font-medium text-white text-sm">
                         {service.name}
                       </p>
                       {service.description && (
-                        <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
                           {service.description}
                         </p>
                       )}
@@ -229,7 +255,7 @@ export function BookingPage() {
                     </div>
                     <ChevronRight
                       size={16}
-                      className="text-[var(--text-muted)] mt-1"
+                      className="text-[var(--text-muted)] mt-1 shrink-0"
                     />
                   </div>
                 </button>
@@ -251,11 +277,11 @@ export function BookingPage() {
 
           {/* Selected service summary */}
           <div className="card p-3 flex items-center gap-3 mb-5">
-            <div className="p-2 rounded-lg bg-gold-600/10">
+            <div className="p-2 rounded-lg bg-gold-600/10 shrink-0">
               <Scissors size={16} className="text-gold-500" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-white">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">
                 {selectedService?.name}
               </p>
               <p className="text-xs text-[var(--text-muted)]">
@@ -288,20 +314,23 @@ export function BookingPage() {
                     setSelectedBarber(barber);
                     setStep("datetime");
                   }}
-                  className="w-full text-left p-4 rounded-xl border bg-dark-300 border-dark-50 hover:border-gold-600/30 hover:bg-dark-200 transition-all duration-200 flex items-center gap-4"
+                  className="w-full text-left p-4 rounded-xl border bg-dark-300 border-dark-50 hover:border-gold-600/30 hover:bg-dark-200 transition-all duration-200 flex items-center gap-3"
                 >
                   <div className="w-11 h-11 rounded-full bg-gold-600/15 border border-gold-600/25 flex items-center justify-center text-gold-500 font-display font-semibold text-base shrink-0">
                     {barber.user.name.charAt(0)}
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-white text-sm">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-white text-sm truncate">
                       {barber.user.name}
                     </p>
                     <p className="text-xs text-emerald-400 mt-0.5">
                       ● Disponível
                     </p>
                   </div>
-                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
+                  <ChevronRight
+                    size={16}
+                    className="text-[var(--text-muted)] shrink-0"
+                  />
                 </button>
               ))}
             </div>
@@ -327,22 +356,27 @@ export function BookingPage() {
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <p className="section-label">Data</p>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <button
                   onClick={() =>
                     setCalendarOffset(Math.max(0, calendarOffset - 7))
                   }
                   disabled={calendarOffset === 0}
-                  className="p-1 rounded-lg hover:bg-dark-200 disabled:opacity-30 transition-all"
+                  className="p-1.5 rounded-lg hover:bg-dark-200 disabled:opacity-30 transition-all"
+                  aria-label="Semana anterior"
                 >
-                  <ChevronLeft size={16} className="text-[var(--text-secondary)]" />
+                  <ChevronLeft
+                    size={16}
+                    className="text-[var(--text-secondary)]"
+                  />
                 </button>
                 <button
                   onClick={() =>
                     setCalendarOffset(Math.min(7, calendarOffset + 7))
                   }
                   disabled={calendarOffset >= 7}
-                  className="p-1 rounded-lg hover:bg-dark-200 disabled:opacity-30 transition-all"
+                  className="p-1.5 rounded-lg hover:bg-dark-200 disabled:opacity-30 transition-all"
+                  aria-label="Próxima semana"
                 >
                   <ChevronRight
                     size={16}
@@ -351,7 +385,8 @@ export function BookingPage() {
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-7 gap-1.5">
+
+            <div className="grid grid-cols-7 gap-1">
               {visibleDates.map((date) => {
                 const dateKey = format(date, "yyyy-MM-dd");
                 const isSelected =
@@ -367,7 +402,7 @@ export function BookingPage() {
                       setSelectedTime(null);
                     }}
                     className={cn(
-                      "flex flex-col items-center py-2.5 rounded-xl border text-xs transition-all duration-200",
+                      "flex flex-col items-center py-2 rounded-xl border text-xs transition-all duration-200",
                       isSelected
                         ? "bg-gold-600 border-gold-500 text-white"
                         : isToday
@@ -375,12 +410,14 @@ export function BookingPage() {
                         : "bg-dark-300 border-dark-50 text-[var(--text-secondary)] hover:border-gold-600/30"
                     )}
                   >
-                    <span className="text-[10px] opacity-70">
+                    <span className="text-[9px] opacity-70 font-medium">
                       {format(date, "EEE", { locale: ptBR })
                         .slice(0, 3)
                         .toUpperCase()}
                     </span>
-                    <span className="font-semibold">{format(date, "d")}</span>
+                    <span className="font-semibold text-sm leading-tight">
+                      {format(date, "d")}
+                    </span>
                   </button>
                 );
               })}
@@ -391,25 +428,31 @@ export function BookingPage() {
           <div>
             <p className="section-label mb-3">
               Horários disponíveis —{" "}
-              {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+              {format(selectedDate, "dd/MM", { locale: ptBR })}
             </p>
 
             {loadingSlots ? (
               <div className="flex justify-center py-8">
                 <Spinner />
               </div>
-            ) : availability?.slots.length === 0 ? (
-              <div className="text-center py-8 text-[var(--text-muted)] text-sm">
-                Nenhum horário disponível nesta data
+            ) : !availability?.slots.length ? (
+              <div className="card p-6 text-center">
+                <Calendar
+                  size={20}
+                  className="text-[var(--text-muted)] mx-auto mb-2"
+                />
+                <p className="text-sm text-[var(--text-muted)]">
+                  Nenhum horário disponível nesta data
+                </p>
               </div>
             ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                {availability?.slots.map((slot: string) => (
+              <div className="grid grid-cols-4 gap-2">
+                {availability.slots.map((slot: string) => (
                   <button
                     key={slot}
                     onClick={() => setSelectedTime(slot)}
                     className={cn(
-                      "py-2 rounded-xl border text-xs font-medium transition-all duration-200",
+                      "py-2.5 rounded-xl border text-xs font-semibold transition-all duration-200",
                       selectedTime === slot
                         ? "bg-gold-600 border-gold-500 text-white"
                         : "bg-dark-300 border-dark-50 text-[var(--text-secondary)] hover:border-gold-600/30 hover:text-white"
@@ -451,18 +494,18 @@ export function BookingPage() {
           <div className="card divide-y divide-dark-50 mb-5">
             <div className="p-4 flex items-center gap-3">
               <Scissors size={16} className="text-gold-500 shrink-0" />
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="section-label">Serviço</p>
-                <p className="text-sm font-medium text-white">
+                <p className="text-sm font-medium text-white truncate">
                   {selectedService?.name}
                 </p>
               </div>
             </div>
             <div className="p-4 flex items-center gap-3">
               <User size={16} className="text-gold-500 shrink-0" />
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="section-label">Barbeiro</p>
-                <p className="text-sm font-medium text-white">
+                <p className="text-sm font-medium text-white truncate">
                   {selectedBarber?.user.name}
                 </p>
               </div>
@@ -499,7 +542,6 @@ export function BookingPage() {
             </div>
           </div>
 
-          {/* Notes */}
           <div className="mb-6">
             <label className="section-label block mb-2">
               Observações (opcional)

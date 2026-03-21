@@ -7,11 +7,9 @@ import {
   LayoutDashboard,
   ClipboardList,
   TrendingUp,
-  Settings,
   Users,
   BarChart3,
   LogOut,
-  ChevronRight,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { authApi } from "@/lib/api";
@@ -28,22 +26,26 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   // Client
-  { to: "/agendar", icon: <Scissors size={20} />, label: "Agendar", roles: ["CLIENT", "ADMIN", "BARBER"] },
-  { to: "/agendamentos", icon: <Calendar size={20} />, label: "Meus horários", roles: ["CLIENT"] },
-  { to: "/perfil", icon: <User size={20} />, label: "Perfil", roles: ["CLIENT", "ADMIN", "BARBER"] },
+  { to: "/agendar",      icon: <Scissors size={20} />,       label: "Agendar",       roles: ["CLIENT", "ADMIN", "BARBER"] },
+  { to: "/agendamentos", icon: <Calendar size={20} />,        label: "Meus horários", roles: ["CLIENT"] },
+  { to: "/perfil",       icon: <User size={20} />,            label: "Perfil",        roles: ["CLIENT", "ADMIN", "BARBER"] },
 
   // Barber
-  { to: "/barbeiro/dashboard", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ["BARBER"] },
-  { to: "/barbeiro/agenda", icon: <Calendar size={20} />, label: "Minha Agenda", roles: ["BARBER"] },
-  { to: "/barbeiro/comandas", icon: <ClipboardList size={20} />, label: "Comandas", roles: ["BARBER"] },
-  { to: "/barbeiro/ganhos", icon: <TrendingUp size={20} />, label: "Ganhos", roles: ["BARBER"] },
+  { to: "/barbeiro/dashboard", icon: <LayoutDashboard size={20} />, label: "Dashboard",    roles: ["BARBER"] },
+  { to: "/barbeiro/agenda",    icon: <Calendar size={20} />,        label: "Minha Agenda", roles: ["BARBER"] },
+  { to: "/barbeiro/comandas",  icon: <ClipboardList size={20} />,   label: "Comandas",     roles: ["BARBER"] },
+  { to: "/barbeiro/ganhos",    icon: <TrendingUp size={20} />,      label: "Ganhos",       roles: ["BARBER"] },
 
   // Admin
-  { to: "/admin/dashboard", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ["ADMIN"] },
-  { to: "/admin/servicos", icon: <Scissors size={20} />, label: "Serviços", roles: ["ADMIN"] },
-  { to: "/admin/barbeiros", icon: <Users size={20} />, label: "Barbeiros", roles: ["ADMIN"] },
-  { to: "/admin/relatorios", icon: <BarChart3 size={20} />, label: "Relatórios", roles: ["ADMIN"] },
+  { to: "/admin/dashboard",  icon: <LayoutDashboard size={20} />, label: "Dashboard",  roles: ["ADMIN"] },
+  { to: "/admin/servicos",   icon: <Scissors size={20} />,        label: "Serviços",   roles: ["ADMIN"] },
+  { to: "/admin/barbeiros",  icon: <Users size={20} />,            label: "Barbeiros",  roles: ["ADMIN"] },
+  { to: "/admin/relatorios", icon: <BarChart3 size={20} />,        label: "Relatórios", roles: ["ADMIN"] },
 ];
+
+// Bottom nav height in px — used to calculate the scroll-buffer padding.
+// Keep in sync with the nav element's h-16 (64px) + pb-safe.
+const BOTTOM_NAV_HEIGHT = "4rem"; // 64px = h-16
 
 export function AppLayout() {
   const { user, refreshToken, logout } = useAuthStore();
@@ -53,14 +55,14 @@ export function AppLayout() {
     user ? n.roles.includes(user.role) : false
   );
 
-  // Bottom nav items (max 4 for mobile)
+  // Mobile bottom nav shows at most 4 items.
   const bottomNav = userNav.slice(0, 4);
 
   const handleLogout = async () => {
     try {
       if (refreshToken) await authApi.logout(refreshToken);
     } catch {
-      // ignore
+      // Ignore logout API errors — we still clear local state.
     }
     logout();
     navigate("/login");
@@ -69,7 +71,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-dvh bg-dark-500 flex">
-      {/* Desktop Sidebar */}
+      {/* ── Desktop Sidebar ── */}
       <aside className="hidden md:flex flex-col w-64 bg-dark-400 border-r border-dark-50 fixed h-full z-20">
         <div className="p-6 border-b border-dark-50">
           <Logo />
@@ -82,9 +84,15 @@ export function AppLayout() {
               {user?.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+              <p className="text-sm font-medium text-white truncate">
+                {user?.name}
+              </p>
               <p className="text-xs text-[var(--text-muted)]">
-                {user?.role === "ADMIN" ? "Administrador" : user?.role === "BARBER" ? "Barbeiro" : "Cliente"}
+                {user?.role === "ADMIN"
+                  ? "Administrador"
+                  : user?.role === "BARBER"
+                  ? "Barbeiro"
+                  : "Cliente"}
               </p>
             </div>
           </div>
@@ -125,7 +133,7 @@ export function AppLayout() {
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* ── Main Content ── */}
       <main className="flex-1 md:ml-64 flex flex-col min-h-dvh">
         {/* Mobile Header */}
         <header className="md:hidden sticky top-0 z-10 bg-dark-400/95 backdrop-blur-sm border-b border-dark-50 px-4 py-3 flex items-center justify-between">
@@ -137,21 +145,33 @@ export function AppLayout() {
           </div>
         </header>
 
-        {/* Page Content */}
-        <div className="flex-1 overflow-auto">
-          <Outlet />
+        {/* Page Content
+            FIX: On mobile the sticky bottom nav (h-16 ≈ 64px) overlaps the last
+            portion of the page content. We add a matching padding-bottom so the
+            user can always scroll the content fully into view.
+            `md:pb-0` removes the padding on desktop where there is no bottom nav. */}
+        <div
+          className="flex-1 overflow-auto md:pb-0"
+          style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT} + env(safe-area-inset-bottom, 0px))` }}
+        >
+          {/* The inner wrapper only applies the mobile padding; desktop gets none
+              via the md: override on the parent. We use an inline style so the
+              safe-area env() value is respected (Tailwind can't express this). */}
+          <div className="md:pb-0">
+            <Outlet />
+          </div>
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <nav className="md:hidden sticky bottom-0 bg-dark-400/95 backdrop-blur-sm border-t border-dark-50 pb-safe">
-          <div className="flex">
+        <nav className="md:hidden sticky bottom-0 z-10 bg-dark-400/95 backdrop-blur-sm border-t border-dark-50 pb-safe">
+          <div className="flex h-16">
             {bottomNav.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    "flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-medium transition-all duration-200",
+                    "flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-all duration-200",
                     isActive
                       ? "text-gold-400"
                       : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
@@ -159,7 +179,7 @@ export function AppLayout() {
                 }
               >
                 {item.icon}
-                <span>{item.label}</span>
+                <span className="leading-none">{item.label}</span>
               </NavLink>
             ))}
           </div>
