@@ -1,6 +1,6 @@
 // src/services/availability.service.ts
 import { prisma } from "../lib/prisma";
-import { addMinutes, isBefore, isAfter, format, startOfDay, endOfDay } from "date-fns";
+import { addMinutes, isBefore, isAfter, format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 const TIMEZONE = "America/Sao_Paulo";
@@ -16,26 +16,36 @@ export const DAY_OF_WEEK_MAP: Record<number, string> = {
 };
 
 /**
- * Parse a "yyyy-MM-dd" string as a Brazil-local date, avoiding UTC midnight issues.
- * "2026-03-22" → Sunday in Brazil, regardless of server timezone.
+ * Parses a date (string or Date object) into its Brazil-local calendar components.
+ *
+ * When a date like "2026-03-22" arrives via query param, JS creates it as UTC midnight.
+ * We convert to BRT to extract the correct local calendar date and day-of-week.
  */
-function parseDateBR(dateInput: Date | string): { year: number; month: number; day: number; dayOfWeek: string } {
-  // If it came as a Date object from new Date("2026-03-22"), it's UTC midnight
-  // Convert to Brazil time to get the correct calendar date
+function parseDateBR(dateInput: Date | string): {
+  year: number;
+  month: number;
+  day: number;
+  dayOfWeek: string;
+} {
   const zonedDate = toZonedTime(
     typeof dateInput === "string" ? new Date(dateInput) : dateInput,
     TIMEZONE
   );
 
-  // Use format to extract the date parts in Brazil timezone
   const dateStr = format(zonedDate, "yyyy-MM-dd");
   const [year, month, day] = dateStr.split("-").map(Number);
 
-  // Build a plain local Date to get day of week correctly
-  const localDate = new Date(year, month - 1, day);
-  const dayOfWeek = DAY_OF_WEEK_MAP[localDate.getDay()];
+  // Build a plain local Date solely to determine the day-of-week index.
+  const dayOfWeek = DAY_OF_WEEK_MAP[new Date(year, month - 1, day).getDay()];
 
   return { year, month, day, dayOfWeek };
+}
+
+/**
+ * Pads a number to two digits, e.g. 3 → "03".
+ */
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
 }
 
 export async function getAvailableSlots(
@@ -45,32 +55,36 @@ export async function getAvailableSlots(
 ): Promise<string[]> {
   const { year, month, day, dayOfWeek } = parseDateBR(date);
 
-  // Check if barber has schedule for this day of week
+  // 1. Check if the barber works on this day-of-week.
   const schedule = await prisma.barberSchedule.findFirst({
-    where: {
-      barberProfileId,
-      dayOfWeek: dayOfWeek as any,
-      isActive: true,
-    },
+    where: { barberProfileId, dayOfWeek: dayOfWeek as any, isActive: true },
   });
-
   if (!schedule) return [];
 
-  // Build the Brazil-local day boundaries for querying existing appointments
-  // "2026-03-22 00:00:00 BRT" → UTC equivalent
-  const dayStartBR = fromZonedTime(`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}T00:00:00`, TIMEZONE);
-  const dayEndBR   = fromZonedTime(`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}T23:59:59`, TIMEZONE);
-
-  // Check if this date is blocked
+  // 2. Check if this calendar date is explicitly blocked.
+  //
+  // FIX: @db.Date fields are stored as UTC midnight (e.g. 2026-03-22T00:00:00Z).
+  // Using a BRT-offset range query (dayStartBR = 2026-03-22T03:00:00Z) would
+  // make the gte condition false — UTC midnight < BRT midnight. We must
+  // compare with the exact UTC midnight value that Prisma persists.
+  const targetDateUTC = new Date(
+    `${year}-${pad(month)}-${pad(day)}T00:00:00.000Z`
+  );
   const blocked = await prisma.barberBlockedDate.findFirst({
-    where: {
-      barberProfileId,
-      date: { gte: dayStartBR, lte: dayEndBR },
-    },
+    where: { barberProfileId, date: targetDateUTC },
   });
   if (blocked) return [];
 
-  // Get existing appointments for this day
+  // 3. Fetch existing appointments for this Brazil calendar day.
+  const dayStartBR = fromZonedTime(
+    `${year}-${pad(month)}-${pad(day)}T00:00:00`,
+    TIMEZONE
+  );
+  const dayEndBR = fromZonedTime(
+    `${year}-${pad(month)}-${pad(day)}T23:59:59`,
+    TIMEZONE
+  );
+
   const existingAppointments = await prisma.appointment.findMany({
     where: {
       barberProfileId,
@@ -80,17 +94,16 @@ export async function getAvailableSlots(
     select: { scheduledAt: true, endsAt: true },
   });
 
-  // Generate slots in Brazil time
+  // 4. Generate candidate slots within the schedule window.
   const [startHour, startMin] = schedule.startTime.split(":").map(Number);
-  const [endHour, endMin]     = schedule.endTime.split(":").map(Number);
+  const [endHour, endMin] = schedule.endTime.split(":").map(Number);
 
-  // Build slot start/end as Brazil-local timestamps (in UTC)
   let slotStart = fromZonedTime(
-    `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}T${String(startHour).padStart(2,"0")}:${String(startMin).padStart(2,"0")}:00`,
+    `${year}-${pad(month)}-${pad(day)}T${pad(startHour)}:${pad(startMin)}:00`,
     TIMEZONE
   );
   const scheduleEnd = fromZonedTime(
-    `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}T${String(endHour).padStart(2,"0")}:${String(endMin).padStart(2,"0")}:00`,
+    `${year}-${pad(month)}-${pad(day)}T${pad(endHour)}:${pad(endMin)}:00`,
     TIMEZONE
   );
 
@@ -100,25 +113,23 @@ export async function getAvailableSlots(
   while (isBefore(slotStart, scheduleEnd)) {
     const slotEnd = addMinutes(slotStart, serviceDuration);
 
-    // Skip past slots (add 5 min buffer)
+    // Skip slots that have already started (5-minute buffer).
     if (isBefore(slotStart, addMinutes(now, 5))) {
       slotStart = addMinutes(slotStart, schedule.slotDuration);
       continue;
     }
 
-    // Don't go past end of schedule
+    // Skip slots that would extend past the end of the working day.
     if (isAfter(slotEnd, scheduleEnd)) break;
 
-    // Check conflicts
-    const hasConflict = existingAppointments.some((apt) => {
-      return (
-        isBefore(slotStart, apt.endsAt) &&
-        isAfter(slotEnd, apt.scheduledAt)
-      );
-    });
+    // Skip slots that overlap any existing appointment.
+    const hasConflict = existingAppointments.some(
+      (apt) =>
+        isBefore(slotStart, apt.endsAt) && isAfter(slotEnd, apt.scheduledAt)
+    );
 
     if (!hasConflict) {
-      // Return time in Brazil timezone format "HH:mm"
+      // Return time strings in Brazil timezone ("HH:mm").
       slots.push(format(toZonedTime(slotStart, TIMEZONE), "HH:mm"));
     }
 

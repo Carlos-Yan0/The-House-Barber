@@ -1,7 +1,7 @@
 // src/pages/BookingPage.tsx
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,24 +12,28 @@ import {
   Check,
   Scissors,
 } from "lucide-react";
-import { format, addDays, isBefore, startOfDay, parseISO } from "date-fns";
+import { format, addDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { servicesApi, barbersApi, appointmentsApi } from "@/lib/api";
 import { Button, Spinner, EmptyState } from "@/components/ui";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import type { Service, BarberProfile } from "@/types";
 import toast from "react-hot-toast";
 
 type Step = "service" | "barber" | "datetime" | "confirm";
 
+// Brazil is always UTC-3 (DST was abolished in 2019).
+const BRT_OFFSET = "-03:00";
+
 export function BookingPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [step, setStep] = useState<Step>("service");
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<BarberProfile | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [calendarOffset, setCalendarOffset] = useState(0);
@@ -45,13 +49,16 @@ export function BookingPage() {
     enabled: step === "barber",
   });
 
+  // Keyed on barberId + date + serviceId so React Query caches per combination.
+  const availabilityQueryKey = [
+    "availability",
+    selectedBarber?.id,
+    format(selectedDate, "yyyy-MM-dd"),
+    selectedService?.id,
+  ];
+
   const { data: availability, isLoading: loadingSlots } = useQuery({
-    queryKey: [
-      "availability",
-      selectedBarber?.id,
-      format(selectedDate, "yyyy-MM-dd"),
-      selectedService?.id,
-    ],
+    queryKey: availabilityQueryKey,
     queryFn: () =>
       appointmentsApi
         .getAvailability(
@@ -65,14 +72,24 @@ export function BookingPage() {
 
   const bookMutation = useMutation({
     mutationFn: () => {
-      const [h, m] = selectedTime!.split(":");
-      const scheduledAt = new Date(selectedDate);
-      scheduledAt.setHours(Number(h), Number(m), 0, 0);
+      // FIX: Build the scheduledAt ISO string using the Brazil timezone offset
+      // instead of the browser's local timezone. Without this, a user whose
+      // computer is set to e.g. UTC+5 would book "09:00 local" (04:00 BRT)
+      // instead of "09:00 BRT" — a 5-hour mistake.
+      //
+      // `format(selectedDate, "yyyy-MM-dd")` gives the calendar date the user
+      // visually selected (e.g. "2026-03-22"). Appending the BRT offset ensures
+      // new Date(...) interprets the time as BRT, and toISOString() converts it
+      // correctly to UTC before sending to the server.
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const scheduledAt = new Date(
+        `${dateStr}T${selectedTime!}:00${BRT_OFFSET}`
+      ).toISOString();
 
       return appointmentsApi.create({
         barberProfileId: selectedBarber!.id,
         serviceId: selectedService!.id,
-        scheduledAt: scheduledAt.toISOString(),
+        scheduledAt,
         notes: notes || undefined,
       });
     },
@@ -81,17 +98,26 @@ export function BookingPage() {
       navigate("/agendamentos");
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.error ?? "Erro ao agendar");
+      const message = err.response?.data?.error ?? "Erro ao agendar";
+      toast.error(message);
+
+      // On conflict (409 = slot already taken), refresh the availability list
+      // so the user immediately sees the slot removed, then reset their selection.
+      if (err.response?.status === 409) {
+        queryClient.invalidateQueries({ queryKey: ["availability"] });
+        setSelectedTime(null);
+        setStep("datetime");
+      }
     },
   });
 
-  // Pre-select service from URL param
+  // Pre-select service from URL param (e.g. home page "Reservar" button).
   useEffect(() => {
     const serviceId = searchParams.get("service");
     if (serviceId && services.length > 0) {
-      const s = services.find((sv) => sv.id === serviceId);
-      if (s) {
-        setSelectedService(s);
+      const found = services.find((s) => s.id === serviceId);
+      if (found) {
+        setSelectedService(found);
         setStep("barber");
       }
     }
@@ -106,19 +132,15 @@ export function BookingPage() {
 
   const stepIndex = STEPS.findIndex((s) => s.key === step);
 
-  // Generate date options (next 14 days)
+  // 14 days starting from today.
   const dateOptions = Array.from({ length: 14 }, (_, i) =>
     addDays(startOfDay(new Date()), i)
   );
-
-  const visibleDates = dateOptions.slice(
-    calendarOffset,
-    calendarOffset + 7
-  );
+  const visibleDates = dateOptions.slice(calendarOffset, calendarOffset + 7);
 
   return (
     <div className="page-container animate-fade-in">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="mb-6">
         <h1 className="font-display text-2xl font-semibold text-white">
           Novo Agendamento
@@ -128,7 +150,7 @@ export function BookingPage() {
         </p>
       </div>
 
-      {/* Step indicator */}
+      {/* ── Step indicator ── */}
       <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-1">
         {STEPS.map((s, i) => (
           <div key={s.key} className="flex items-center gap-2 shrink-0">
@@ -147,9 +169,7 @@ export function BookingPage() {
             <span
               className={cn(
                 "text-xs font-medium",
-                i === stepIndex
-                  ? "text-white"
-                  : "text-[var(--text-muted)]"
+                i === stepIndex ? "text-white" : "text-[var(--text-muted)]"
               )}
             >
               {s.label}
@@ -161,7 +181,7 @@ export function BookingPage() {
         ))}
       </div>
 
-      {/* STEP 1: Service */}
+      {/* ── STEP 1: Service ── */}
       {step === "service" && (
         <div className="animate-slide-up">
           <h2 className="text-base font-medium text-white mb-4">
@@ -219,7 +239,7 @@ export function BookingPage() {
         </div>
       )}
 
-      {/* STEP 2: Barber */}
+      {/* ── STEP 2: Barber ── */}
       {step === "barber" && (
         <div className="animate-slide-up">
           <button
@@ -289,7 +309,7 @@ export function BookingPage() {
         </div>
       )}
 
-      {/* STEP 3: Date & Time */}
+      {/* ── STEP 3: Date & Time ── */}
       {step === "datetime" && (
         <div className="animate-slide-up">
           <button
@@ -324,22 +344,24 @@ export function BookingPage() {
                   disabled={calendarOffset >= 7}
                   className="p-1 rounded-lg hover:bg-dark-200 disabled:opacity-30 transition-all"
                 >
-                  <ChevronRight size={16} className="text-[var(--text-secondary)]" />
+                  <ChevronRight
+                    size={16}
+                    className="text-[var(--text-secondary)]"
+                  />
                 </button>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-1.5">
               {visibleDates.map((date) => {
+                const dateKey = format(date, "yyyy-MM-dd");
                 const isSelected =
-                  format(date, "yyyy-MM-dd") ===
-                  format(selectedDate, "yyyy-MM-dd");
+                  dateKey === format(selectedDate, "yyyy-MM-dd");
                 const isToday =
-                  format(date, "yyyy-MM-dd") ===
-                  format(new Date(), "yyyy-MM-dd");
+                  dateKey === format(new Date(), "yyyy-MM-dd");
 
                 return (
                   <button
-                    key={date.toISOString()}
+                    key={dateKey}
                     onClick={() => {
                       setSelectedDate(date);
                       setSelectedTime(null);
@@ -412,7 +434,7 @@ export function BookingPage() {
         </div>
       )}
 
-      {/* STEP 4: Confirm */}
+      {/* ── STEP 4: Confirm ── */}
       {step === "confirm" && (
         <div className="animate-slide-up">
           <button
