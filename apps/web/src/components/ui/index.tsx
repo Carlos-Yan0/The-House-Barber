@@ -283,36 +283,21 @@ export function Modal({ isOpen, onClose, title, children, size = "md" }: ModalPr
 }
 
 // ─── Stats Card ──────────────────────────────────────────────
-// Layout:
-//   linha 1 → label (texto completo, pode quebrar linha, largura total)
-//   linha 2 → valor grande à esquerda · ícone à direita (shrink-0)
-// Assim o label nunca é truncado e o ícone nunca estoura o card.
 interface StatsCardProps {
   label: string;
   value: string | number;
-  icon?: React.ReactNode;
+  icon?: React.ReactNode; // mantido na interface para não quebrar chamadas existentes, mas não renderizado
   trend?: { value: number; label: string };
   className?: string;
 }
 
-export function StatsCard({ label, value, icon, trend, className }: StatsCardProps) {
+export function StatsCard({ label, value, trend, className }: StatsCardProps) {
   return (
     <div className={cn("card-elevated p-4", className)}>
-      {/* Label ocupa a linha toda — quebra se necessário, sem truncar */}
-      <p className="section-label mb-3 leading-snug">{label}</p>
-
-      {/* Valor + ícone na mesma linha */}
-      <div className="flex items-end justify-between gap-2">
-        <p className="text-2xl font-display font-semibold text-white leading-none">
-          {value}
-        </p>
-        {icon && (
-          <div className="p-1.5 rounded-lg bg-gold-600/10 text-gold-500 shrink-0">
-            {icon}
-          </div>
-        )}
-      </div>
-
+      <p className="section-label mb-2 leading-snug">{label}</p>
+      <p className="text-2xl font-display font-semibold text-white leading-none">
+        {value}
+      </p>
       {trend && (
         <p
           className={cn(
