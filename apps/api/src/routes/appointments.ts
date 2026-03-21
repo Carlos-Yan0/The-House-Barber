@@ -29,7 +29,7 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
       }
       const service = await prisma.service.findUnique({ where: { id: serviceId as string } });
       if (!service) { set.status = 404; return { error: "Serviço não encontrado" }; }
-      const slots = await getAvailableSlots(barberId as string, new Date(date as string), service.duration);
+      const slots = await getAvailableSlots(barberId as string, date as string, service.duration);
       return { slots, date, barberId, serviceId };
     },
     {

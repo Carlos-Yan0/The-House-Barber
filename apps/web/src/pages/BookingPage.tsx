@@ -78,8 +78,6 @@ export function BookingPage() {
 
   const bookMutation = useMutation({
     mutationFn: () => {
-      // FIX: Hardcode BRT offset so the time is always interpreted as
-      // Brazil time regardless of the user's browser timezone.
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       const scheduledAt = new Date(
         `${dateStr}T${selectedTime!}:00${BRT_OFFSET}`
@@ -100,8 +98,6 @@ export function BookingPage() {
       const message = err.response?.data?.error ?? "Erro ao agendar";
       toast.error(message);
 
-      // Slot already taken (409): refresh the availability list so the
-      // occupied slot disappears, then reset the user's selection.
       if (err.response?.status === 409) {
         queryClient.invalidateQueries({ queryKey: ["availability"] });
         setSelectedTime(null);
@@ -110,7 +106,6 @@ export function BookingPage() {
     },
   });
 
-  // Pre-select service from URL param (e.g. home page "Reservar" button).
   useEffect(() => {
     const serviceId = searchParams.get("service");
     if (serviceId && services.length > 0) {
@@ -124,16 +119,11 @@ export function BookingPage() {
 
   const stepIndex = STEPS.findIndex((s) => s.key === step);
 
-  // 14 days starting from today.
   const dateOptions = Array.from({ length: 14 }, (_, i) =>
     addDays(startOfDay(new Date()), i)
   );
   const visibleDates = dateOptions.slice(calendarOffset, calendarOffset + 7);
 
-  // ── Step Indicator ──────────────────────────────────────────────────────────
-  // On very narrow screens (< 380px) showing 4 full labels + chevrons overflows.
-  // Strategy: always show the number circle; show the label only for the
-  // current step on mobile (xs), and for all steps on sm+.
   const StepIndicator = () => (
     <div className="flex items-center mb-8">
       {STEPS.map((s, i) => {
@@ -148,7 +138,6 @@ export function BookingPage() {
               i < STEPS.length - 1 ? "flex-1" : ""
             )}
           >
-            {/* Circle */}
             <div className="flex items-center gap-1.5 shrink-0">
               <div
                 className={cn(
@@ -163,22 +152,20 @@ export function BookingPage() {
                 {isDone ? <Check size={11} /> : i + 1}
               </div>
 
-              {/* Label: always visible for current step; hidden on xs for others */}
               <span
                 className={cn(
                   "text-xs font-medium whitespace-nowrap transition-all",
                   isCurrent
-                    ? "text-white"             // current: always visible
+                    ? "text-white"
                     : isDone
-                    ? "text-gold-600 hidden sm:inline"  // done: hide on xs
-                    : "text-[var(--text-muted)] hidden sm:inline" // future: hide on xs
+                    ? "text-gold-600 hidden sm:inline"
+                    : "text-[var(--text-muted)] hidden sm:inline"
                 )}
               >
                 {s.shortLabel}
               </span>
             </div>
 
-            {/* Connector line between steps */}
             {i < STEPS.length - 1 && (
               <div
                 className={cn(
@@ -195,7 +182,6 @@ export function BookingPage() {
 
   return (
     <div className="page-container animate-fade-in">
-      {/* ── Header ── */}
       <div className="mb-6">
         <h1 className="font-display text-2xl font-semibold text-white">
           Novo Agendamento
@@ -207,7 +193,6 @@ export function BookingPage() {
 
       <StepIndicator />
 
-      {/* ── STEP 1: Service ── */}
       {step === "service" && (
         <div className="animate-slide-up">
           <h2 className="text-base font-medium text-white mb-4">
@@ -265,7 +250,6 @@ export function BookingPage() {
         </div>
       )}
 
-      {/* ── STEP 2: Barber ── */}
       {step === "barber" && (
         <div className="animate-slide-up">
           <button
@@ -275,7 +259,6 @@ export function BookingPage() {
             <ChevronLeft size={16} /> Voltar
           </button>
 
-          {/* Selected service summary */}
           <div className="card p-3 flex items-center gap-3 mb-5">
             <div className="p-2 rounded-lg bg-gold-600/10 shrink-0">
               <Scissors size={16} className="text-gold-500" />
@@ -338,7 +321,6 @@ export function BookingPage() {
         </div>
       )}
 
-      {/* ── STEP 3: Date & Time ── */}
       {step === "datetime" && (
         <div className="animate-slide-up">
           <button
@@ -352,7 +334,6 @@ export function BookingPage() {
             Escolha data e horário
           </h2>
 
-          {/* Date picker strip */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <p className="section-label">Data</p>
@@ -424,7 +405,6 @@ export function BookingPage() {
             </div>
           </div>
 
-          {/* Time slots */}
           <div>
             <p className="section-label mb-3">
               Horários disponíveis —{" "}
@@ -446,19 +426,22 @@ export function BookingPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
-                {availability.slots.map((slot: string) => (
+              <div className="grid grid-cols-3 gap-2">
+                {availability.slots.map((slot: { time: string; available: boolean }) => (
                   <button
-                    key={slot}
-                    onClick={() => setSelectedTime(slot)}
+                    key={slot.time}
+                    disabled={!slot.available}
+                    onClick={() => setSelectedTime(slot.time)}
                     className={cn(
-                      "py-2.5 rounded-xl border text-xs font-semibold transition-all duration-200",
-                      selectedTime === slot
-                        ? "bg-gold-600 border-gold-500 text-white"
+                      "py-3 rounded-xl border text-sm font-semibold transition-all duration-200",
+                      !slot.available 
+                        ? "bg-dark-200/50 border-dark-100 text-gray-600 opacity-30 cursor-not-allowed" 
+                        : selectedTime === slot.time
+                        ? "bg-gold-600 border-gold-500 text-white shadow-[0_0_15px_rgba(212,175,55,0.3)]"
                         : "bg-dark-300 border-dark-50 text-[var(--text-secondary)] hover:border-gold-600/30 hover:text-white"
                     )}
                   >
-                    {slot}
+                    {slot.time}
                   </button>
                 ))}
               </div>
@@ -477,7 +460,6 @@ export function BookingPage() {
         </div>
       )}
 
-      {/* ── STEP 4: Confirm ── */}
       {step === "confirm" && (
         <div className="animate-slide-up">
           <button

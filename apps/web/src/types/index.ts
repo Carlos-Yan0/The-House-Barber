@@ -135,7 +135,7 @@ export interface PaginatedResponse<T> {
 }
 
 export interface AvailabilityResponse {
-  slots: string[];
+  slots: { time: string; available: boolean }[];
   date: string;
   barberId: string;
   serviceId: string;

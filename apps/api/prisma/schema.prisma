@@ -86,6 +86,7 @@ model BarberProfile {
   blockedDates BarberBlockedDate[]
   appointments Appointment[]
   commissions  Commission[]
+  workingDays     WorkingDay[]
 
   @@map("barber_profiles")
 }
@@ -213,4 +214,18 @@ model SystemConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_config")
+}
+model WorkingDay {
+  id              String    @id @default(cuid())
+  barberProfileId String    @map("barber_profile_id")
+  dayOfWeek       DayOfWeek @map("day_of_week")
+  startTime       String    @default("09:00") @map("start_time") // Ex: "09:00"
+  endTime         String    @default("19:00") @map("end_time")   // Ex: "19:00"
+  slotDuration    Int       @default(30)      @map("slot_duration") // Tempo entre cada slot
+  isOpen          Boolean   @default(true)    @map("is_open")
+
+  barberProfile   BarberProfile @relation(fields: [barberProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([barberProfileId, dayOfWeek])
+  @@map("working_days")
 }
