@@ -82,7 +82,7 @@ const app = new Elysia()
     };
   })
 
-  .listen(PORT);
+  .listen({ port: PORT, hostname: "0.0.0.0" });
 
 console.log(`🚀 The House Barber API running at http://localhost:${PORT}`);
 console.log(`📚 Swagger docs at http://localhost:${PORT}/swagger`);
