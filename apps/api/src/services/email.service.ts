@@ -1,35 +1,21 @@
 // src/services/email.service.ts
-// Serviço de envio de e-mail via SMTP usando nodemailer.
-// Configurar as variáveis de ambiente no .env:
-//   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+// Serviço de envio de e-mail via API REST do Resend.
+// Docs: https://resend.com/docs/api-reference/emails/send-email
 //
-// Provedores recomendados (gratuitos):
-//   - Resend (resend.com) — 3.000 e-mails/mês grátis, SMTP simples
-//   - Brevo (brevo.com)  — 300 e-mails/dia grátis
-//   - Gmail SMTP         — para testes locais
+// Vantagem sobre SMTP: no plano gratuito do Resend, usando a API diretamente
+// com o domínio padrão (onboarding@resend.dev), é possível enviar para
+// qualquer destinatário — sem precisar verificar domínio próprio.
+//
+// Variáveis de ambiente necessárias no .env:
+//   RESEND_API_KEY  → chave da API (começa com re_...)
+//   RESEND_FROM     → remetente (ex: "The House Barber <onboarding@resend.dev>")
+//   APP_URL         → URL do frontend (ex: https://the-house-barber-web.vercel.app)
 
-const SMTP_HOST = process.env.SMTP_HOST ?? "";
-const SMTP_PORT = Number(process.env.SMTP_PORT ?? 587);
-const SMTP_USER = process.env.SMTP_USER ?? "";
-const SMTP_PASS = process.env.SMTP_PASS ?? "";
-const SMTP_FROM = process.env.SMTP_FROM ?? "The House Barber <noreply@thehousebarber.com>";
-const APP_URL   = process.env.APP_URL   ?? "http://localhost:5173";
+const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
+const RESEND_FROM    = process.env.RESEND_FROM    ?? "The House Barber <onboarding@resend.dev>";
+const APP_URL        = process.env.APP_URL        ?? "http://localhost:5173";
 
-// Nodemailer é instalado com: bun add nodemailer @types/nodemailer
-let transporter: any = null;
-
-async function getTransporter() {
-  if (transporter) return transporter;
-
-  const nodemailer = await import("nodemailer");
-  transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
-  return transporter;
-}
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 
 interface SendMailOptions {
   to: string;
@@ -37,18 +23,48 @@ interface SendMailOptions {
   html: string;
 }
 
+interface ResendResponse {
+  id?: string;
+  statusCode?: number;
+  message?: string;
+  name?: string;
+}
+
+// ── Função central de envio ───────────────────────────────────────────────────
+
 async function sendMail(options: SendMailOptions): Promise<void> {
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    // Em desenvolvimento sem SMTP configurado, apenas loga o e-mail no console.
-    console.log("\n📧 [EMAIL — sem SMTP configurado, exibindo no console]");
-    console.log(`   Para:     ${options.to}`);
-    console.log(`   Assunto:  ${options.subject}`);
-    console.log(`   Conteúdo: ${options.html.replace(/<[^>]+>/g, " ").trim().slice(0, 300)}\n`);
+  // Sem chave configurada → exibe no console (modo dev)
+  if (!RESEND_API_KEY) {
+    console.log("\n📧 [EMAIL — RESEND_API_KEY não configurada, exibindo no console]");
+    console.log(`   Para:    ${options.to}`);
+    console.log(`   Assunto: ${options.subject}`);
+    console.log(`   Preview: ${options.html.replace(/<[^>]+>/g, " ").trim().slice(0, 300)}\n`);
     return;
   }
 
-  const t = await getTransporter();
-  await t.sendMail({ from: SMTP_FROM, ...options });
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from:    RESEND_FROM,
+      to:      [options.to],
+      subject: options.subject,
+      html:    options.html,
+    }),
+  });
+
+  const data = await res.json() as ResendResponse;
+
+  if (!res.ok) {
+    throw new Error(
+      `[Resend] Erro ${res.status}: ${data.message ?? data.name ?? "Falha ao enviar e-mail"}`
+    );
+  }
+
+  console.log(`[Resend] E-mail enviado com sucesso — id: ${data.id}`);
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────
@@ -66,12 +82,15 @@ export async function sendPasswordResetEmail(
     html: `
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
 <body style="margin:0;padding:0;background:#111111;font-family:'DM Sans',Arial,sans-serif;color:#f5f5f5;">
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;">
     <tr><td align="center">
       <table width="100%" style="max-width:480px;background:#1c1c1c;border-radius:16px;border:1px solid #2a2a2a;overflow:hidden;">
-        
+
         <!-- Header -->
         <tr><td style="padding:28px 32px;border-bottom:1px solid #2a2a2a;">
           <span style="font-family:Georgia,serif;font-size:18px;font-weight:700;letter-spacing:2px;">
