@@ -133,13 +133,19 @@ export function BookingPage() {
     enabled: step === "barber",
   });
 
-  const { data: availability, isLoading: loadingSlots } = useQuery({
+  // isFetching (não isLoading) porque o placeholderData global do QueryClient
+  // faz isLoading=false quando há dados anteriores em cache — o spinner sumia
+  // ao trocar de data. isFetching é true em qualquer busca ativa, inclusive
+  // revalidações com dados antigos presentes.
+  // placeholderData: undefined evita mostrar horários de outra data enquanto carrega.
+  const { data: availability, isFetching: loadingSlots } = useQuery({
     queryKey: ["availability", selectedBarber?.id, selectedDateStr, selectedService?.id],
     queryFn: () =>
       appointmentsApi
         .getAvailability(selectedBarber!.id, selectedDateStr, selectedService!.id)
         .then((r) => r.data),
     enabled: step === "datetime" && !!selectedBarber && !!selectedService,
+    placeholderData: undefined,
   });
 
   const bookMutation = useMutation({
