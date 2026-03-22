@@ -17,15 +17,17 @@
     "@elysiajs/jwt": "1.1.1",
     "@elysiajs/swagger": "1.1.6",
     "@prisma/client": "6.1.0",
-    "elysia": "1.1.26",
-    "zod": "^3.23.8",
     "bcryptjs": "^2.4.3",
     "date-fns": "^3.6.0",
-    "date-fns-tz": "^3.2.0"
+    "date-fns-tz": "^3.2.0",
+    "elysia": "1.1.26",
+    "nodemailer": "^8.0.3",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "prisma": "6.1.0",
     "@types/bcryptjs": "^2.4.6",
-    "bun-types": "latest"
+    "@types/nodemailer": "^7.0.11",
+    "bun-types": "latest",
+    "prisma": "6.1.0"
   }
 }

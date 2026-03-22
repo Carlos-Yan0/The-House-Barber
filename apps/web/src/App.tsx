@@ -16,6 +16,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 const HomePage       = lazy(() => import("@/pages/HomePage").then((m) => ({ default: m.HomePage })));
 const LoginPage      = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const RegisterPage   = lazy(() => import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
+const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage  = lazy(() => import("@/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
 
 // Client
 const BookingPage      = lazy(() => import("@/pages/BookingPage").then((m) => ({ default: m.BookingPage })));
@@ -71,9 +73,11 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route element={<PublicLayout />}>
-          <Route path="/"         element={<HomePage />} />
-          <Route path="/login"    element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/"                 element={<HomePage />} />
+          <Route path="/login"            element={<LoginPage />} />
+          <Route path="/register"         element={<RegisterPage />} />
+          <Route path="/esqueci-senha"    element={<ForgotPasswordPage />} />
+          <Route path="/redefinir-senha"  element={<ResetPasswordPage />} />
         </Route>
 
         {/* Client */}
