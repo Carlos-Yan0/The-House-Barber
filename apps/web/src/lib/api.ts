@@ -54,20 +54,20 @@ export const authApi = {
 };
 
 export const servicesApi = {
-  list:   (all?: boolean)                    => api.get("/services", { params: all ? { all: "true" } : {} }),
-  get:    (id: string)                       => api.get(`/services/${id}`),
-  create: (data: unknown)                    => api.post("/services", data),
-  update: (id: string, data: unknown)        => api.put(`/services/${id}`, data),
-  delete: (id: string)                       => api.delete(`/services/${id}`),
+  list:   (all?: boolean)             => api.get("/services", { params: all ? { all: "true" } : {} }),
+  get:    (id: string)                => api.get(`/services/${id}`),
+  create: (data: unknown)             => api.post("/services", data),
+  update: (id: string, data: unknown) => api.put(`/services/${id}`, data),
+  delete: (id: string)                => api.delete(`/services/${id}`),
 };
 
 export const barbersApi = {
-  list:           ()                                               => api.get("/barbers"),
-  get:            (id: string)                                     => api.get(`/barbers/${id}`),
-  getSchedule:    (id: string)                                     => api.get(`/barbers/${id}/schedule`),
-  updateSchedule: (id: string, schedules: unknown[])              => api.put(`/barbers/${id}/schedule`, { schedules }),
-  blockDate:      (id: string, date: string, reason?: string)     => api.post(`/barbers/${id}/blocked-dates`, { date, reason }),
-  unblockDate:    (id: string, dateId: string)                    => api.delete(`/barbers/${id}/blocked-dates/${dateId}`),
+  list:           ()                                                   => api.get("/barbers"),
+  get:            (id: string)                                         => api.get(`/barbers/${id}`),
+  getSchedule:    (id: string)                                         => api.get(`/barbers/${id}/schedule`),
+  updateSchedule: (id: string, schedules: unknown[])                  => api.put(`/barbers/${id}/schedule`, { schedules }),
+  blockDate:      (id: string, date: string, reason?: string)         => api.post(`/barbers/${id}/blocked-dates`, { date, reason }),
+  unblockDate:    (id: string, dateId: string)                        => api.delete(`/barbers/${id}/blocked-dates/${dateId}`),
   getEarnings:    (id: string, params?: { startDate?: string; endDate?: string }) =>
     api.get(`/barbers/${id}/earnings`, { params }),
 };
@@ -94,8 +94,7 @@ export const appointmentsApi = {
 };
 
 export const paymentsApi = {
-  pixStatus: (appointmentId: string) =>
-    api.get(`/payments/pix/status/${appointmentId}`),
+  pixStatus: (appointmentId: string) => api.get(`/payments/pix/status/${appointmentId}`),
 };
 
 export const comandasApi = {
@@ -110,4 +109,13 @@ export const adminApi = {
   createBarber: (data: unknown)                              => api.post("/admin/barbers", data),
   listUsers:    (role?: string)                              => api.get("/admin/users", { params: role ? { role } : {} }),
   payCommission:(id: string)                                 => api.patch(`/admin/commissions/${id}/pay`, {}),
+
+  // Edita nome, e-mail, telefone e/ou comissão de um barbeiro
+  updateBarber: (
+    id: string,
+    data: { name?: string; email?: string; phone?: string; commissionRate?: number }
+  ) => api.patch(`/admin/barbers/${id}`, data),
+
+  // Alterna isActive do usuário (ativa ↔ inativa)
+  toggleUserActive: (id: string) => api.patch(`/admin/users/${id}/toggle-active`, {}),
 };
