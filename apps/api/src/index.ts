@@ -9,7 +9,6 @@ import { barberRoutes } from "./routes/barbers";
 import { comandaRoutes } from "./routes/comandas";
 import { adminRoutes } from "./routes/admin";
 import { paymentRoutes } from "./routes/payments";
-import { keepAlive } from "./utils/keepAlive";
 
 const PORT = Number(process.env.PORT) || 3333;
 
@@ -86,9 +85,5 @@ const app = new Elysia()
 
 console.log(`🚀 The House Barber API running at http://localhost:${PORT}`);
 console.log(`📚 Swagger docs at http://localhost:${PORT}/swagger`);
-
-if (process.env.NODE_ENV === "production") {
-  keepAlive();
-}
 
 export type App = typeof app;
