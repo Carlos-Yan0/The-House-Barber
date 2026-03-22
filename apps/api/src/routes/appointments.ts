@@ -151,6 +151,10 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
         set.status = 404;
         return { error: "Barbeiro não encontrado ou indisponível" };
       }
+      if (barber.userId === user.id) {
+        set.status = 422;
+        return { error: "Você não pode agendar um horário consigo mesmo" };
+      }
 
       const service = await prisma.service.findUnique({
         where: { id: serviceId, isActive: true },
