@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, UserCheck, Percent, Edit2, PowerOff, Power } from "lucide-react";
 import { adminApi } from "@/lib/api";
 import { Button, EmptyState, Spinner, Modal, Input, Badge } from "@/components/ui";
-import { getInitials } from "@/lib/utils";
+
 import type { User } from "@/types";
 import toast from "react-hot-toast";
 
@@ -122,56 +122,46 @@ export function AdminBarbersPage() {
       ) : (
         <div className="space-y-3">
           {(barbers as any[]).map((barber) => (
-            <div key={barber.id} className="card-elevated p-4">
-              <div className="flex items-center gap-4">
-                {/* Avatar */}
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-display font-semibold text-base shrink-0 ${
-                  barber.isActive
-                    ? "bg-gold-600/15 border border-gold-600/25 text-gold-500"
-                    : "bg-dark-50/50 border border-dark-50 text-[var(--text-muted)]"
-                }`}>
-                  {getInitials(barber.name)}
-                </div>
-
+            <div key={barber.id} className={`card-elevated p-4 transition-all ${!barber.isActive && "opacity-50"}`}>
+              <div className="flex items-start justify-between gap-3">
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className={`font-medium text-sm truncate ${barber.isActive ? "text-white" : "text-[var(--text-muted)]"}`}>
-                      {barber.name}
-                    </p>
-                    <Badge variant={barber.isActive ? "green" : "gray"}>
-                      {barber.isActive ? "Ativo" : "Inativo"}
-                    </Badge>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-white text-sm">{barber.name}</p>
+                    {!barber.isActive && <Badge variant="gray">Inativo</Badge>}
                   </div>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">{barber.email}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{barber.email}</p>
                   {barber.barberProfile && (
-                    <div className="flex items-center gap-1.5 text-xs text-gold-400 mt-1">
+                    <div className="flex items-center gap-1 text-xs text-gold-400 mt-1.5">
                       <Percent size={11} />
                       {Math.round(barber.barberProfile.commissionRate * 100)}% de comissão
                     </div>
                   )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1 shrink-0">
+                {/* Ações — mesmo padrão da tela de serviços */}
+                <div className="flex gap-2">
                   <button
                     onClick={() => openEdit(barber)}
-                    title="Editar barbeiro"
                     className="p-2 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-dark-50/60 transition-all"
                   >
                     <Edit2 size={15} />
                   </button>
-                  <button
-                    onClick={() => openToggle(barber)}
-                    title={barber.isActive ? "Inativar barbeiro" : "Reativar barbeiro"}
-                    className={`p-2 rounded-lg transition-all ${
-                      barber.isActive
-                        ? "text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10"
-                        : "text-[var(--text-muted)] hover:text-emerald-400 hover:bg-emerald-500/10"
-                    }`}
-                  >
-                    {barber.isActive ? <PowerOff size={15} /> : <Power size={15} />}
-                  </button>
+                  {barber.isActive ? (
+                    <button
+                      onClick={() => openToggle(barber)}
+                      className="p-2 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                    >
+                      <PowerOff size={15} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => openToggle(barber)}
+                      className="p-2 rounded-lg text-[var(--text-muted)] hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                    >
+                      <Power size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
