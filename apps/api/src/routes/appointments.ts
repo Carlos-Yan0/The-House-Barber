@@ -145,6 +145,7 @@ const createSchema = z.object({
   serviceId:       z.string(),
   scheduledAt:     z.string(),
   paymentMethod:   z.enum(["CASH", "PIX"]),
+  clientNameOverride: z.string().trim().min(2).max(100).optional(),
   notes:           z.string().optional(),
 });
 
@@ -291,7 +292,22 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
         return { error: parsed.error.flatten() };
       }
 
-      const { barberProfileId, serviceId, scheduledAt, paymentMethod, notes } = parsed.data;
+      const {
+        barberProfileId,
+        serviceId,
+        scheduledAt,
+        paymentMethod,
+        clientNameOverride,
+        notes,
+      } = parsed.data;
+
+      const canUseClientNameOverride = Boolean(
+        (user.role === "BARBER" || user.role === "ADMIN") &&
+        user.barberProfile &&
+        user.barberProfile.id === barberProfileId
+      );
+      const normalizedClientNameOverride =
+        canUseClientNameOverride && clientNameOverride ? clientNameOverride.trim() : undefined;
 
       const barber = await prisma.barberProfile.findUnique({
         where: { id: barberProfileId, isAvailable: true },
@@ -347,6 +363,7 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
             serviceId,
             scheduledAt:    startTime,
             endsAt,
+            clientNameOverride: normalizedClientNameOverride,
             notes,
             status:         "PENDING",
           },
@@ -440,6 +457,7 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
         serviceId:       t.String(),
         scheduledAt:     t.String(),
         paymentMethod:   t.Union([t.Literal("CASH"), t.Literal("PIX")]),
+        clientNameOverride: t.Optional(t.String()),
         notes:           t.Optional(t.String()),
       }),
     }

@@ -84,6 +84,7 @@ export const appointmentsApi = {
     serviceId:       string;
     scheduledAt:     string;
     paymentMethod:   "CASH" | "PIX";
+    clientNameOverride?: string;
     notes?:          string;
   }) => api.post("/appointments", data),
 

@@ -134,6 +134,7 @@ function AppointmentTimeline({
         const aptStartMin = minutesFromMidnight(aptStart);
         const aptEndMin   = minutesFromMidnight(aptEnd);
         const durationMin = aptEndMin - aptStartMin;
+        const displayClientName = apt.clientNameOverride ?? apt.client?.name;
 
         const top    = ((aptStartMin - startMinutes) / 30) * SLOT_HEIGHT + 1;
         const height = (durationMin / 30) * SLOT_HEIGHT - 2;
@@ -167,7 +168,7 @@ function AppointmentTimeline({
           >
             <p className="text-xs font-semibold text-white leading-tight truncate">
               {formatTime(apt.scheduledAt)} · {formatTime(apt.endsAt)}
-              {apt.client?.name ? ` — ${apt.client.name}` : ""}
+              {displayClientName ? ` — ${displayClientName}` : ""}
             </p>
 
             {apt.service && durationMin >= 20 && (
@@ -424,7 +425,9 @@ export function AdminDashboardPage() {
       >
         {closeApt && (
           <div className="mb-4 p-3 rounded-xl bg-dark-400 border border-dark-50">
-            <p className="text-sm font-medium text-white">{closeApt.client?.name}</p>
+            <p className="text-sm font-medium text-white">
+              {closeApt.clientNameOverride ?? closeApt.client?.name}
+            </p>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
               {closeApt.service?.name}
               {closeApt.service && ` · ${formatCurrency(closeApt.service.price)}`}
@@ -492,3 +495,4 @@ export function AdminDashboardPage() {
     </div>
   );
 }
+

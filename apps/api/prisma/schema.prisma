@@ -147,6 +147,7 @@ model Appointment {
   scheduledAt     DateTime          @map("scheduled_at")
   endsAt          DateTime          @map("ends_at")
   status          AppointmentStatus @default(PENDING)
+  clientNameOverride String?        @map("client_name_override")
   notes           String?
   cancelReason    String?           @map("cancel_reason")
   createdAt       DateTime          @default(now()) @map("created_at")

@@ -82,6 +82,7 @@ export interface Appointment {
   scheduledAt: string;
   endsAt: string;
   status: AppointmentStatus;
+  clientNameOverride?: string | null;
   notes?: string | null;
   cancelReason?: string | null;
   createdAt: string;

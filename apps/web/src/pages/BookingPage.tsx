@@ -13,6 +13,7 @@ import { getApiErrorMessage } from "@/lib/apiError";
 import { connectAvailabilitySocket, fetchAvailabilityHttp } from "@/lib/availabilitySocket";
 import { Button, Spinner, EmptyState } from "@/components/ui";
 import { formatCurrency, cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/authStore";
 import type { Service, BarberProfile, AvailabilityResponse } from "@/types";
 import toast from "react-hot-toast";
 
@@ -81,6 +82,7 @@ export function BookingPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
 
   const [step, setStep] = useState<Step>("service");
   const [selectedService,  setSelectedService]  = useState<Service | null>(null);
@@ -88,6 +90,7 @@ export function BookingPage() {
   const [selectedDate,     setSelectedDate]     = useState<Date>(startOfDay(new Date()));
   const [selectedTime,     setSelectedTime]     = useState<string | null>(null);
   const [paymentMethod,    setPaymentMethod]    = useState<PaymentMethod>("CASH");
+  const [clientDisplayName, setClientDisplayName] = useState("");
   const [notes,            setNotes]            = useState("");
   const [calendarOffset,   setCalendarOffset]   = useState(0);
   const [availability,     setAvailability]     = useState<AvailabilityResponse | null>(null);
@@ -109,6 +112,14 @@ export function BookingPage() {
     () => format(selectedDate, "yyyy-MM-dd"),
     [selectedDate]
   );
+  const isBarberOrAdmin = user?.role === "BARBER" || user?.role === "ADMIN";
+  const isBookingForOwnBarberProfile = Boolean(
+    isBarberOrAdmin &&
+    user?.barberProfile?.id &&
+    selectedBarber?.id &&
+    user.barberProfile.id === selectedBarber.id
+  );
+  const normalizedClientDisplayName = clientDisplayName.trim();
 
   // ── Stable callbacks ──────────────────────────────────────────────────────
   const handleSelectService = useCallback((service: Service) => {
@@ -213,6 +224,10 @@ export function BookingPage() {
         serviceId:       selectedService!.id,
         scheduledAt,
         paymentMethod,
+        clientNameOverride:
+          isBookingForOwnBarberProfile && normalizedClientDisplayName.length >= 2
+            ? normalizedClientDisplayName
+            : undefined,
         notes: notes || undefined,
       });
     },
@@ -521,7 +536,23 @@ export function BookingPage() {
           </div>
 
           <div className="mb-6">
-            <label className="section-label block mb-2">Observações (opcional)</label>
+            {isBookingForOwnBarberProfile && (
+              <div className="mb-5">
+                <label className="section-label block mb-2">Nome do cliente (opcional)</label>
+                <input
+                  value={clientDisplayName}
+                  onChange={(e) => setClientDisplayName(e.target.value)}
+                  placeholder="Ex: Joao da Silva"
+                  maxLength={100}
+                  className="input-field"
+                />
+                <p className="text-xs text-[var(--text-muted)] mt-2">
+                  Esse nome aparecera na agenda no lugar do seu nome.
+                </p>
+              </div>
+            )}
+
+            <label className="section-label block mb-2">Observacoes (opcional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

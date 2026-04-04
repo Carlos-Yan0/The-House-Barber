@@ -39,6 +39,7 @@ export function Button({
 
   return (
     <button
+      type={props.type ?? "button"}
       className={cn(base, variants[variant], sizes[size], className)}
       disabled={disabled || loading}
       {...props}
@@ -269,6 +270,7 @@ export function Modal({ isOpen, onClose, title, children, size = "md" }: ModalPr
           <div className="flex items-center justify-between px-5 py-4 border-b border-dark-50">
             <h2 className="font-display font-semibold text-white">{title}</h2>
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-dark-50/60 transition-all"
             >

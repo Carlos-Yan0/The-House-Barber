@@ -102,6 +102,7 @@ function AppointmentTimeline({
         const aptStartMin = minutesFromMidnight(aptStart);
         const aptEndMin = minutesFromMidnight(aptEnd);
         const durationMin = aptEndMin - aptStartMin;
+        const displayClientName = apt.clientNameOverride ?? apt.client?.name;
 
         const top = ((aptStartMin - startMinutes) / 30) * SLOT_HEIGHT + 1;
         const height = (durationMin / 30) * SLOT_HEIGHT - 2;
@@ -141,10 +142,10 @@ function AppointmentTimeline({
               </p>
             )}
 
-            {apt.client?.name && durationMin >= 20 && (
+            {displayClientName && durationMin >= 20 && (
               <p className="text-[10px] text-blue-100/70 mt-0.5 leading-tight flex items-center gap-1 truncate">
                 <User size={9} className="shrink-0" />
-                Cliente: {apt.client.name}
+                Cliente: {displayClientName}
               </p>
             )}
 
@@ -373,7 +374,9 @@ export function BarberDashboardPage() {
       >
         {closeApt && (
           <div className="mb-4 p-3 rounded-xl bg-dark-400 border border-dark-50">
-            <p className="text-sm font-medium text-white">{closeApt.client?.name}</p>
+            <p className="text-sm font-medium text-white">
+              {closeApt.clientNameOverride ?? closeApt.client?.name}
+            </p>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
               {closeApt.service?.name}
               {closeApt.service && ` · ${formatCurrency(closeApt.service.price)}`}
