@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, UserCheck, Percent, Edit2, PowerOff, Power } from "lucide-react";
 import { adminApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { Button, EmptyState, Spinner, Modal, Input, Badge } from "@/components/ui";
 import { onlyDigits } from "@/lib/Inputhandlers";
 import type { User } from "@/types";
@@ -69,7 +70,7 @@ export function AdminBarbersPage() {
       setCreateModal(false);
       createForm.reset();
     },
-    onError: (err: any) => toast.error(err.response?.data?.error ?? "Erro ao criar"),
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, "Erro ao criar")),
   });
 
   const editMutation = useMutation({
@@ -86,7 +87,7 @@ export function AdminBarbersPage() {
       setEditModal(false);
       setEditingId(null);
     },
-    onError: (err: any) => toast.error(err.response?.data?.error ?? "Erro ao atualizar"),
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, "Erro ao atualizar")),
   });
 
   const toggleMutation = useMutation({
@@ -97,7 +98,7 @@ export function AdminBarbersPage() {
       setToggleModal(false);
       setToggleTarget(null);
     },
-    onError: (err: any) => toast.error(err.response?.data?.error ?? "Erro ao atualizar status"),
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, "Erro ao atualizar status")),
   });
 
   const openEdit = (barber: any) => {

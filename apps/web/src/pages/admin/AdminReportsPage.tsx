@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, endOfMonth } from "date-fns";
 import { BarChart3, DollarSign, TrendingUp, CheckCircle } from "lucide-react";
 import { adminApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { StatsCard, Button, Spinner, EmptyState, Badge } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -32,6 +33,8 @@ export function AdminReportsPage() {
       toast.success("Comissão marcada como paga!");
       qc.invalidateQueries({ queryKey: ["admin-revenue"] });
     },
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao marcar comissão como paga")),
   });
 
   const byBarber: Record<string, { revenue: number; commissions: number; count: number }> =

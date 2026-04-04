@@ -1,14 +1,144 @@
 // src/routes/appointments.ts
 import Elysia, { t } from "elysia";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { getUserFromHeader } from "../lib/getUser";
 import { getAvailableSlots } from "../services/availability.service";
 import { createPixPayment } from "../services/mercadopago.service";
 import { addMinutes, format } from "date-fns";
-import { fromZonedTime } from "date-fns-tz";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
 const TIMEZONE = "America/Sao_Paulo";
+const APPOINTMENT_OVERLAP_CONSTRAINT = "appointments_no_overlap_active";
+const APPOINTMENT_INTERVAL_CONSTRAINT = "appointments_valid_interval_chk";
+
+type AvailabilityQuery = {
+  barberId: string;
+  date: string;
+  serviceId: string;
+};
+
+type AvailabilityWsMessage =
+  | {
+      type: "availability";
+      slots: string[];
+      date: string;
+      barberId: string;
+      serviceId: string;
+    }
+  | {
+      type: "error";
+      error: string;
+      status?: number;
+    };
+
+type AvailabilitySocket = {
+  id?: string;
+  send: (data: AvailabilityWsMessage) => unknown;
+};
+
+type AvailabilitySubscription = {
+  id: string;
+  ws: AvailabilitySocket;
+  query: AvailabilityQuery;
+};
+
+const availabilitySubscriptions = new Map<string, AvailabilitySubscription>();
+
+function isValidDateInput(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function getAvailabilitySocketId(ws: AvailabilitySocket): string {
+  if (!ws.id) ws.id = crypto.randomUUID();
+  return ws.id;
+}
+
+function registerAvailabilitySubscription(ws: AvailabilitySocket, query: AvailabilityQuery) {
+  const id = getAvailabilitySocketId(ws);
+  availabilitySubscriptions.set(id, { id, ws, query });
+}
+
+function unregisterAvailabilitySubscription(ws: AvailabilitySocket) {
+  if (!ws.id) return;
+  availabilitySubscriptions.delete(ws.id);
+}
+
+async function buildAvailabilitySnapshot(query: AvailabilityQuery): Promise<AvailabilityWsMessage> {
+  const { barberId, date, serviceId } = query;
+
+  if (!barberId || !date || !serviceId) {
+    return { type: "error", status: 400, error: "barberId, date e serviceId são obrigatórios" };
+  }
+
+  if (!isValidDateInput(date)) {
+    return { type: "error", status: 400, error: "date deve estar no formato yyyy-MM-dd" };
+  }
+
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId, isActive: true },
+    select: { duration: true },
+  });
+
+  if (!service) {
+    return { type: "error", status: 404, error: "Serviço não encontrado" };
+  }
+
+  const slots = await getAvailableSlots(barberId, date, service.duration);
+  return { type: "availability", slots, date, barberId, serviceId };
+}
+
+async function sendAvailabilitySnapshot(ws: AvailabilitySocket, query: AvailabilityQuery) {
+  const payload = await buildAvailabilitySnapshot(query);
+  ws.send(payload);
+}
+
+async function notifyAvailabilitySubscribers(barberId: string, date: string) {
+  const subscribers = [...availabilitySubscriptions.values()].filter(
+    ({ query }) => query.barberId === barberId && query.date === date
+  );
+
+  for (const subscriber of subscribers) {
+    try {
+      await sendAvailabilitySnapshot(subscriber.ws, subscriber.query);
+    } catch {
+      availabilitySubscriptions.delete(subscriber.id);
+    }
+  }
+}
+
+function isAppointmentConflictError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") return true;
+    if (error.code === "P2004") {
+      const details = String(error.meta?.database_error ?? "");
+      return details.includes(APPOINTMENT_OVERLAP_CONSTRAINT);
+    }
+  }
+
+  if (error instanceof Error) {
+    return (
+      error.message.includes(APPOINTMENT_OVERLAP_CONSTRAINT) ||
+      error.message.includes("conflicting key value violates exclusion constraint")
+    );
+  }
+
+  return false;
+}
+
+function isInvalidAppointmentIntervalError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2004") {
+    const details = String(error.meta?.database_error ?? "");
+    return details.includes(APPOINTMENT_INTERVAL_CONSTRAINT);
+  }
+
+  if (error instanceof Error) {
+    return error.message.includes(APPOINTMENT_INTERVAL_CONSTRAINT);
+  }
+
+  return false;
+}
 
 const createSchema = z.object({
   barberProfileId: z.string(),
@@ -62,6 +192,26 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
   )
 
   // ── GET /appointments ─────────────────────────────────────────────────────
+  .ws("/availability/ws", {
+    query: t.Object({
+      barberId: t.String(),
+      date: t.String(),
+      serviceId: t.String(),
+    }),
+    async open(ws) {
+      const query = ws.data.query as AvailabilityQuery;
+      registerAvailabilitySubscription(ws, query);
+      await sendAvailabilitySnapshot(ws, query);
+    },
+    async message(ws) {
+      const query = ws.data.query as AvailabilityQuery;
+      await sendAvailabilitySnapshot(ws, query);
+    },
+    close(ws) {
+      unregisterAvailabilitySubscription(ws);
+    },
+  })
+
   .get(
     "/",
     async ({ headers, query, set }) => {
@@ -188,24 +338,37 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
         return { error: "Horário não disponível" };
       }
 
-      const appointment = await prisma.appointment.create({
-        data: {
-          clientId:       user.id,
-          barberProfileId,
-          serviceId,
-          scheduledAt:    startTime,
-          endsAt,
-          notes,
-          status:         "PENDING",
-        },
-        include: {
-          service: true,
-          barberProfile: {
-            include: { user: { select: { name: true, email: true } } },
+      let appointment;
+      try {
+        appointment = await prisma.appointment.create({
+          data: {
+            clientId:       user.id,
+            barberProfileId,
+            serviceId,
+            scheduledAt:    startTime,
+            endsAt,
+            notes,
+            status:         "PENDING",
           },
-          client: { select: { id: true, name: true, email: true } },
-        },
-      });
+          include: {
+            service: true,
+            barberProfile: {
+              include: { user: { select: { name: true, email: true } } },
+            },
+            client: { select: { id: true, name: true, email: true } },
+          },
+        });
+      } catch (error) {
+        if (isAppointmentConflictError(error)) {
+          set.status = 409;
+          return { error: "Horário não disponível" };
+        }
+        if (isInvalidAppointmentIntervalError(error)) {
+          set.status = 422;
+          return { error: "Data/hora inválida" };
+        }
+        throw error;
+      }
 
       set.status = 201;
 
@@ -219,6 +382,7 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
             paymentStatus: "PENDING",
           },
         });
+        await notifyAvailabilitySubscribers(barberProfileId, localDateStr);
         return { appointment, paymentMethod: "CASH", pix: null };
       }
 
@@ -247,6 +411,7 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
             pixTxId:       String(pix.mpPaymentId),
           },
         });
+        await notifyAvailabilitySubscribers(barberProfileId, localDateStr);
 
         return {
           appointment,
@@ -338,6 +503,12 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
         data: { status: status as any, cancelReason },
       });
 
+      const appointmentDate = format(
+        toZonedTime(appointment.scheduledAt, TIMEZONE),
+        "yyyy-MM-dd"
+      );
+      await notifyAvailabilitySubscribers(appointment.barberProfileId, appointmentDate);
+
       return updated;
     },
     {
@@ -378,6 +549,12 @@ export const appointmentRoutes = new Elysia({ prefix: "/appointments" })
         where: { id: params.id },
         data: { status: "CANCELLED", cancelReason: "Cancelado pelo usuário" },
       });
+
+      const appointmentDate = format(
+        toZonedTime(appointment.scheduledAt, TIMEZONE),
+        "yyyy-MM-dd"
+      );
+      await notifyAvailabilitySubscribers(appointment.barberProfileId, appointmentDate);
 
       return { message: "Agendamento cancelado com sucesso" };
     }

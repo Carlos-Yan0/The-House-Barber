@@ -1,7 +1,29 @@
 // src/routes/barbers.ts
 import Elysia, { t } from "elysia";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { getUserFromHeader } from "../lib/getUser";
+
+function isInvalidScheduleError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2004") {
+    const details = String(error.meta?.database_error ?? "");
+    return (
+      details.includes("barber_schedules_start_time_format_chk") ||
+      details.includes("barber_schedules_end_time_format_chk") ||
+      details.includes("barber_schedules_start_before_end_chk")
+    );
+  }
+
+  if (error instanceof Error) {
+    return (
+      error.message.includes("barber_schedules_start_time_format_chk") ||
+      error.message.includes("barber_schedules_end_time_format_chk") ||
+      error.message.includes("barber_schedules_start_before_end_chk")
+    );
+  }
+
+  return false;
+}
 
 export const barberRoutes = new Elysia({ prefix: "/barbers" })
 
@@ -58,15 +80,23 @@ export const barberRoutes = new Elysia({ prefix: "/barbers" })
     }
 
     const { schedules } = body as { schedules: any[] };
-    return Promise.all(
-      schedules.map((s) =>
-        prisma.barberSchedule.upsert({
-          where: { barberProfileId_dayOfWeek: { barberProfileId: params.id, dayOfWeek: s.dayOfWeek } },
-          create: { barberProfileId: params.id, ...s },
-          update: { startTime: s.startTime, endTime: s.endTime, slotDuration: s.slotDuration, isActive: s.isActive },
-        })
-      )
-    );
+    try {
+      return await Promise.all(
+        schedules.map((s) =>
+          prisma.barberSchedule.upsert({
+            where: { barberProfileId_dayOfWeek: { barberProfileId: params.id, dayOfWeek: s.dayOfWeek } },
+            create: { barberProfileId: params.id, ...s },
+            update: { startTime: s.startTime, endTime: s.endTime, slotDuration: s.slotDuration, isActive: s.isActive },
+          })
+        )
+      );
+    } catch (error) {
+      if (isInvalidScheduleError(error)) {
+        set.status = 422;
+        return { error: "Horários inválidos. Use HH:mm e garanta startTime < endTime." };
+      }
+      throw error;
+    }
   }, {
     body: t.Object({
       schedules: t.Array(t.Object({

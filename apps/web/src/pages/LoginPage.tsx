@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Eye, EyeOff, Scissors } from "lucide-react";
 import { authApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { useAuthStore } from "@/store/authStore";
 import { Logo } from "@/components/ui/Logo";
 import { Input, Button } from "@/components/ui";
@@ -39,7 +40,7 @@ export function LoginPage() {
       else if (user.role === "BARBER") navigate("/barbeiro/dashboard");
       else navigate(from);
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? "Erro ao fazer login");
+      toast.error(getApiErrorMessage(err, "Erro ao fazer login"));
     }
   };
 

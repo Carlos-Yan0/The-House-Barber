@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit2, Trash2, Clock, DollarSign } from "lucide-react";
 import { servicesApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { Button, EmptyState, Spinner, Modal, Input, Badge } from "@/components/ui";
 import { formatCurrency, cn } from "@/lib/utils";
 import { onlyDigits, onlyDecimal } from "@/lib/Inputhandlers";
@@ -54,7 +55,7 @@ export function AdminServicesPage() {
       qc.invalidateQueries({ queryKey: ["services"] });
       closeModal();
     },
-    onError: (err: any) => toast.error(err.response?.data?.error ?? "Erro ao salvar"),
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, "Erro ao salvar")),
   });
 
   const deleteMutation = useMutation({
@@ -63,6 +64,7 @@ export function AdminServicesPage() {
       toast.success("Serviço desativado");
       qc.invalidateQueries({ queryKey: ["services-admin"] });
     },
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, "Erro ao desativar serviço")),
   });
 
   const openCreate = () => {

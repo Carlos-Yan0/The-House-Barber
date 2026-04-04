@@ -5,6 +5,7 @@ import { format, addDays, startOfDay, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, ChevronLeft, ChevronRight, DollarSign, User } from "lucide-react";
 import { appointmentsApi, barbersApi, comandasApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { useAuthStore } from "@/store/authStore";
 import { StatsCard, Spinner, EmptyState, Modal, Button } from "@/components/ui";
 import { formatCurrency, formatTime, cn } from "@/lib/utils";
@@ -212,8 +213,8 @@ export function BarberDashboardPage() {
       setCloseModal(null);
       setCloseApt(null);
     },
-    onError: (err: any) =>
-      toast.error(err.response?.data?.error ?? "Erro ao fechar comanda"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao fechar comanda")),
   });
 
   const cancelMutation = useMutation({
@@ -226,8 +227,8 @@ export function BarberDashboardPage() {
       setCloseModal(null);
       setCloseApt(null);
     },
-    onError: (err: any) =>
-      toast.error(err.response?.data?.error ?? "Erro ao cancelar"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao cancelar")),
   });
 
   const handleBlockClick = (apt: Appointment) => {
@@ -238,7 +239,7 @@ export function BarberDashboardPage() {
   };
 
   const appointments: Appointment[] = (appointmentsData?.data ?? []).filter(
-    (a) => !barberId || a.barberProfileId === barberId
+    (a: Appointment) => !barberId || a.barberProfileId === barberId
   );
   const sortedAppointments = [...appointments].sort(
     (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()

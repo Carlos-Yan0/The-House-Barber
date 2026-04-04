@@ -2,6 +2,7 @@
 import Elysia, { t } from "elysia";
 import { prisma } from "../lib/prisma";
 import { getUserFromHeader } from "../lib/getUser";
+import { calculateCommissionAmount } from "../lib/money";
 
 export const comandaRoutes = new Elysia({ prefix: "/comandas" })
 
@@ -142,7 +143,7 @@ export const comandaRoutes = new Elysia({ prefix: "/comandas" })
             comandaId: comanda.id,
             grossAmount: comanda.totalAmount,
             commissionRate: bp.commissionRate,
-            commissionAmount: Number(comanda.totalAmount) * bp.commissionRate,
+            commissionAmount: calculateCommissionAmount(comanda.totalAmount, bp.commissionRate),
           },
           update: {},
         });

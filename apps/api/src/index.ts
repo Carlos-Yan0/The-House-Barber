@@ -10,6 +10,7 @@ import { comandaRoutes } from "./routes/comandas";
 import { adminRoutes } from "./routes/admin";
 import { paymentRoutes } from "./routes/payments";
 import { startTokenCleanupJob } from "./jobs/cleanupTokens";
+import { mapPrismaErrorToHttp } from "./lib/prismaError";
 
 const PORT = Number(process.env.PORT) || 3333;
 const isDev = process.env.NODE_ENV !== "production";
@@ -85,6 +86,12 @@ const app = new Elysia()
   .onError(({ code, error, set }) => {
     console.error(`[Error ${code}]:`, error);
 
+    const prismaMapped = mapPrismaErrorToHttp(error);
+    if (prismaMapped) {
+      set.status = prismaMapped.status;
+      return prismaMapped.body;
+    }
+
     if (code === "VALIDATION") {
       set.status = 422;
       return { error: "Validation Error", details: error.message };
@@ -108,5 +115,6 @@ startTokenCleanupJob();
 
 console.log(`🚀 The House Barber API running at http://localhost:${PORT}`);
 console.log(`📚 Swagger docs at http://localhost:${PORT}/swagger`);
+console.log("🗄️ DB:", process.env.DATABASE_URL);
 
 export type App = typeof app;

@@ -6,11 +6,13 @@
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
+    "test": "bun test",
     "prisma": "prisma",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
-    "db:seed": "bun run src/utils/seed.ts"
+    "db:seed": "bun run src/utils/seed.ts",
+    "db:trocarSenha": "bun run src/utils/trocarSenha.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "1.1.1",

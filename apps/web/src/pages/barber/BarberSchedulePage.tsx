@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Save, Plus, X, CalendarOff, AlertCircle } from "lucide-react";
 import { barbersApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { useAuthStore } from "@/store/authStore";
 import { Button, Spinner, Modal, Input } from "@/components/ui";
 import { DAY_LABELS, type DayOfWeek } from "@/types";
@@ -70,7 +71,8 @@ export function BarberSchedulePage() {
       toast.success("Agenda atualizada!");
       qc.invalidateQueries({ queryKey: ["barber-schedule"] });
     },
-    onError: () => toast.error("Erro ao salvar a agenda"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao salvar a agenda")),
   });
 
   const blockMutation = useMutation({
@@ -82,7 +84,8 @@ export function BarberSchedulePage() {
       setBlockDate("");
       setBlockReason("");
     },
-    onError: () => toast.error("Erro ao bloquear a data"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao bloquear a data")),
   });
 
   const unblockMutation = useMutation({
@@ -91,7 +94,8 @@ export function BarberSchedulePage() {
       toast.success("Data desbloqueada");
       qc.invalidateQueries({ queryKey: ["barber-schedule"] });
     },
-    onError: () => toast.error("Erro ao desbloquear a data"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao desbloquear a data")),
   });
 
   const updateSchedule = (day: DayOfWeek, field: keyof ScheduleForm, value: any) => {

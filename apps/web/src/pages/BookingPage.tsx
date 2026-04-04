@@ -9,9 +9,11 @@ import {
 import { format, addDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { servicesApi, barbersApi, appointmentsApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
+import { connectAvailabilitySocket, fetchAvailabilityHttp } from "@/lib/availabilitySocket";
 import { Button, Spinner, EmptyState } from "@/components/ui";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { Service, BarberProfile } from "@/types";
+import type { Service, BarberProfile, AvailabilityResponse } from "@/types";
 import toast from "react-hot-toast";
 
 type Step = "service" | "barber" | "datetime" | "confirm";
@@ -88,6 +90,9 @@ export function BookingPage() {
   const [paymentMethod,    setPaymentMethod]    = useState<PaymentMethod>("CASH");
   const [notes,            setNotes]            = useState("");
   const [calendarOffset,   setCalendarOffset]   = useState(0);
+  const [availability,     setAvailability]     = useState<AvailabilityResponse | null>(null);
+  const [loadingSlots,     setLoadingSlots]     = useState(false);
+  const [availabilityTick, setAvailabilityTick] = useState(0);
 
   // Derived values — memoized so child renders don't recompute them.
   const stepIndex = useMemo(
@@ -138,15 +143,64 @@ export function BookingPage() {
   // ao trocar de data. isFetching é true em qualquer busca ativa, inclusive
   // revalidações com dados antigos presentes.
   // placeholderData: undefined evita mostrar horários de outra data enquanto carrega.
-  const { data: availability, isFetching: loadingSlots } = useQuery({
-    queryKey: ["availability", selectedBarber?.id, selectedDateStr, selectedService?.id],
-    queryFn: () =>
-      appointmentsApi
-        .getAvailability(selectedBarber!.id, selectedDateStr, selectedService!.id)
-        .then((r) => r.data),
-    enabled: step === "datetime" && !!selectedBarber && !!selectedService,
-    placeholderData: undefined,
-  });
+  useEffect(() => {
+    if (step !== "datetime" || !selectedBarber || !selectedService) {
+      setAvailability(null);
+      setLoadingSlots(false);
+      return;
+    }
+
+    const query = {
+      barberId: selectedBarber.id,
+      date: selectedDateStr,
+      serviceId: selectedService.id,
+    };
+
+    let isActive = true;
+    setLoadingSlots(true);
+    setAvailability(null);
+
+    const loadViaHttpFallback = async () => {
+      try {
+        const data = await fetchAvailabilityHttp(query);
+        if (!isActive) return;
+        setAvailability(data);
+        setLoadingSlots(false);
+        setSelectedTime((prev) => {
+          if (!prev) return prev;
+          return data.slots.includes(prev) ? prev : null;
+        });
+      } catch {
+        if (!isActive) return;
+        setLoadingSlots(false);
+      }
+    };
+
+    const disconnect = connectAvailabilitySocket(query, {
+      onAvailability: (data) => {
+        if (!isActive) return;
+        setAvailability(data);
+        setLoadingSlots(false);
+        setSelectedTime((prev) => {
+          if (!prev) return prev;
+          return data.slots.includes(prev) ? prev : null;
+        });
+      },
+      onSocketUnavailable: () => {
+        void loadViaHttpFallback();
+      },
+      onErrorMessage: (message) => {
+        if (!isActive) return;
+        setLoadingSlots(false);
+        toast.error(message);
+      },
+    });
+
+    return () => {
+      isActive = false;
+      disconnect();
+    };
+  }, [step, selectedBarber?.id, selectedService?.id, selectedDateStr, availabilityTick]);
 
   const bookMutation = useMutation({
     mutationFn: () => {
@@ -168,10 +222,10 @@ export function BookingPage() {
       navigate("/agendamentos");
     },
     onError: (err: any) => {
-      const message = err.response?.data?.error ?? "Erro ao agendar";
+      const message = getApiErrorMessage(err, "Erro ao agendar");
       toast.error(message);
       if (err.response?.status === 409) {
-        queryClient.invalidateQueries({ queryKey: ["availability"] });
+        setAvailabilityTick((prev) => prev + 1);
         setSelectedTime(null);
         setStep("datetime");
       }

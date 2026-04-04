@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogOut, User, Mail, Phone, Shield, Scissors } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { authApi, barbersApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { Button } from "@/components/ui";
 import { getInitials, cn } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -40,7 +41,8 @@ export function ProfilePage() {
           : "Você foi desativado como barbeiro"
       );
     },
-    onError: () => toast.error("Erro ao atualizar disponibilidade"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao atualizar disponibilidade")),
   });
 
   const roleName =

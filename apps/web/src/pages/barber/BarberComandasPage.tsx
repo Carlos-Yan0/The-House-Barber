@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ClipboardList, CheckCircle, Clock, DollarSign } from "lucide-react";
 import { comandasApi, appointmentsApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { Button, EmptyState, Spinner, Modal } from "@/components/ui";
 import { formatCurrency, formatTime, cn } from "@/lib/utils";
 import {
@@ -49,8 +50,8 @@ export function BarberComandasPage() {
       qc.invalidateQueries({ queryKey: ["barber-appointments-today"] });
       setNoShowId(null);
     },
-    onError: (err: any) =>
-      toast.error(err.response?.data?.error ?? "Erro ao atualizar"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao atualizar")),
   });
 
   const closeMutation = useMutation({
@@ -61,8 +62,8 @@ export function BarberComandasPage() {
       qc.invalidateQueries({ queryKey: ["barber-appointments-today"] });
       setCloseModal(null);
     },
-    onError: (err: any) =>
-      toast.error(err.response?.data?.error ?? "Erro ao fechar comanda"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao fechar comanda")),
   });
 
   const appointments: Appointment[] = aptData?.data ?? [];

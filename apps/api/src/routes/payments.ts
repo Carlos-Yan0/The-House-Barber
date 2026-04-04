@@ -2,6 +2,7 @@
 import Elysia, { t } from "elysia";
 import { prisma } from "../lib/prisma";
 import { getPaymentStatus } from "../services/mercadopago.service";
+import { calculateCommissionAmount } from "../lib/money";
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
 
@@ -127,7 +128,7 @@ async function confirmPixPayment(appointmentId: string, pixTxId: string) {
         comandaId: comanda.id,
         grossAmount: comanda.totalAmount,
         commissionRate: bp.commissionRate,
-        commissionAmount: Number(comanda.totalAmount) * bp.commissionRate,
+        commissionAmount: calculateCommissionAmount(comanda.totalAmount, bp.commissionRate),
       },
       update: {},
     });

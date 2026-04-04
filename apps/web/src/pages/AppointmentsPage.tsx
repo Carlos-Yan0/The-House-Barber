@@ -6,6 +6,7 @@ import { ptBR } from "date-fns/locale";
 import { Calendar, Clock, User, XCircle, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { appointmentsApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { Button, EmptyState, Spinner, Modal } from "@/components/ui";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
@@ -45,7 +46,7 @@ export function AppointmentsPage() {
       qc.invalidateQueries({ queryKey: ["appointments"] });
       setCancelId(null);
     },
-    onError: () => toast.error("Erro ao cancelar"),
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, "Erro ao cancelar")),
   });
 
   const appointments: Appointment[] = data?.data ?? [];

@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { authApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { Logo } from "@/components/ui/Logo";
 import { Input, Button } from "@/components/ui";
 import { onlyDigits } from "@/lib/Inputhandlers";
@@ -44,7 +45,7 @@ export function RegisterPage() {
       toast.success("Conta criada! Faça login para continuar.");
       navigate("/login");
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? "Erro ao criar conta");
+      toast.error(getApiErrorMessage(err, "Erro ao criar conta"));
     }
   };
 

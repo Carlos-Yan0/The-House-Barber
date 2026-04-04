@@ -5,6 +5,7 @@ import { format, addDays, startOfDay, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, ChevronLeft, ChevronRight, DollarSign, User, Users } from "lucide-react";
 import { adminApi, appointmentsApi, comandasApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { useAuthStore } from "@/store/authStore";
 import { StatsCard, Spinner, EmptyState, Modal, Button } from "@/components/ui";
 import { formatCurrency, formatTime, cn } from "@/lib/utils";
@@ -242,8 +243,8 @@ export function AdminDashboardPage() {
       setCloseModal(null);
       setCloseApt(null);
     },
-    onError: (err: any) =>
-      toast.error(err.response?.data?.error ?? "Erro ao fechar comanda"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao fechar comanda")),
   });
 
   const cancelMutation = useMutation({
@@ -256,8 +257,8 @@ export function AdminDashboardPage() {
       setCloseModal(null);
       setCloseApt(null);
     },
-    onError: (err: any) =>
-      toast.error(err.response?.data?.error ?? "Erro ao cancelar"),
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, "Erro ao cancelar")),
   });
 
   const handleBlockClick = (apt: Appointment) => {

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, KeyRound, AlertCircle } from "lucide-react";
 import { authApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { Logo } from "@/components/ui/Logo";
 import { Input, Button } from "@/components/ui";
 import toast from "react-hot-toast";
@@ -47,7 +48,9 @@ export function ResetPasswordPage() {
       toast.success("Senha redefinida! Faça login.");
       navigate("/login", { replace: true });
     } catch (err: any) {
-      setServerError(err.response?.data?.error ?? "Erro ao redefinir senha. Tente novamente.");
+      const message = getApiErrorMessage(err, "Erro ao redefinir senha. Tente novamente.");
+      setServerError(message);
+      toast.error(message);
     }
   };
 
