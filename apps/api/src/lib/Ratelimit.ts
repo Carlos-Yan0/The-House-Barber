@@ -7,14 +7,48 @@
 
 const _windows = new Map<string, number[]>();
 
+// Pre-built configs for common endpoints
+export const LIMITS = {
+  // 30 login attempts per IP per 15 min
+  LOGIN: { limit: 30, windowMs: 15 * 60 * 1000 },
+  // 5 forgot-password requests per IP per hour
+  FORGOT_PASSWORD: { limit: 5, windowMs: 60 * 60 * 1000 },
+  // 10 reset-password attempts per token per hour
+  RESET_PASSWORD: { limit: 10, windowMs: 60 * 60 * 1000 },
+  // 20 register attempts per IP per hour
+  REGISTER: { limit: 20, windowMs: 60 * 60 * 1000 },
+} as const;
+
+// Keep buckets only as long as the longest configured sliding window.
+const MAX_TRACK_WINDOW_MS = Math.max(
+  LIMITS.LOGIN.windowMs,
+  LIMITS.FORGOT_PASSWORD.windowMs,
+  LIMITS.RESET_PASSWORD.windowMs,
+  LIMITS.REGISTER.windowMs
+);
+
+function trimHitsInPlace(hits: number[], minTimestampExclusive: number): number[] {
+  let firstFreshIndex = 0;
+  while (firstFreshIndex < hits.length && hits[firstFreshIndex] <= minTimestampExclusive) {
+    firstFreshIndex += 1;
+  }
+
+  if (firstFreshIndex === 0) return hits;
+  if (firstFreshIndex >= hits.length) return [];
+
+  // Drop stale entries without allocating on every request.
+  hits.splice(0, firstFreshIndex);
+  return hits;
+}
+
 // Prune stale buckets every 10 min to prevent memory leaks.
 setInterval(() => {
   const now = Date.now();
+  const minTimestamp = now - MAX_TRACK_WINDOW_MS;
+
   for (const [key, hits] of _windows) {
-    // Keep only buckets that still have recent hits
-    const fresh = hits.filter((t) => t > now - 15 * 60 * 1000);
+    const fresh = trimHitsInPlace(hits, minTimestamp);
     if (fresh.length === 0) _windows.delete(key);
-    else _windows.set(key, fresh);
   }
 }, 10 * 60 * 1000).unref();
 
@@ -33,7 +67,7 @@ export function checkRateLimit(
   const now = Date.now();
   const windowStart = now - windowMs;
 
-  const hits = (_windows.get(key) ?? []).filter((t) => t > windowStart);
+  const hits = trimHitsInPlace(_windows.get(key) ?? [], windowStart);
 
   if (hits.length >= limit) return false; // blocked
 
@@ -41,15 +75,3 @@ export function checkRateLimit(
   _windows.set(key, hits);
   return true; // allowed
 }
-
-// Pre-built configs for common endpoints
-export const LIMITS = {
-  // 10 login attempts per IP per 15 min
-  LOGIN: { limit: 10, windowMs: 15 * 60 * 1000 },
-  // 5 forgot-password requests per IP per hour
-  FORGOT_PASSWORD: { limit: 5, windowMs: 60 * 60 * 1000 },
-  // 10 reset-password attempts per token per hour
-  RESET_PASSWORD: { limit: 10, windowMs: 60 * 60 * 1000 },
-  // 20 register attempts per IP per hour
-  REGISTER: { limit: 20, windowMs: 60 * 60 * 1000 },
-} as const;
